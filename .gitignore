@@ -1,5 +1,6 @@
 # Rust / Cargo
 /target
+/backend/target
 **/*.rs.bk
 **/*.rs.old
 Cargo.lock
