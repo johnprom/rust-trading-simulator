@@ -1,20 +1,22 @@
-use axum::Router;
-use std::net::SocketAddr;
+use axum::{
+    Router,
+    routing::get,
+};
 use tower_http::services::ServeDir;
+use std::net::SocketAddr;
 
 #[tokio::main]
 async fn main() {
-    let static_files = ServeDir::new("../frontend/target/dx/frontend/release/web/public")
-        .not_found_service(axum::routing::get(|| async {
-            axum::response::Html(include_str!("../../frontend/target/dx/frontend/release/web/public/index.html"))
-        }));
+    // Serve files from "static" directory
+    let static_files = ServeDir::new("static");
 
-    let app = Router::new()
-        .fallback_service(static_files);
+    // Build the router
+    let app = Router::new().nest_service("/", static_files);
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-    println!("listening on http://{}", addr);
-    axum::serve(tokio::net::TcpListener::bind(addr).await.unwrap(), app)
-        .await
-        .unwrap();
+    // Bind and serve
+    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
+    println!("Listening on {}", addr);
+
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    axum::serve(listener, app).await.unwrap();
 }

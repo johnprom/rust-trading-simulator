@@ -1,52 +1,45 @@
-# ========= 1) Base image with Rust =========
-FROM rust:1.89-slim as builder
+# ===== Stage 1: Build =====
+FROM rust:1.89-slim AS builder
 
-# Set working directory inside container
 WORKDIR /app
 
-# Install system dependencies for Rust + OpenSSL
+# Install dependencies for building
 RUN apt-get update && \
     apt-get install -y pkg-config libssl-dev && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Dioxus CLI
-RUN cargo install dioxus-cli --locked
-
-# Copy entire project
+# Copy project
 COPY . .
 
-# --- Build frontend ---
+# Build frontend
 WORKDIR /app/frontend
+RUN cargo install dioxus-cli --locked
 RUN dx build --release
 
-# Create a place for static files in backend
+# Copy frontend output to backend static directory
 WORKDIR /app/backend
 RUN mkdir -p static
+RUN cp -r /app/frontend/target/dx/frontend/release/web/public/* static/ || true
 
-# Copy frontend dist output to backend/static
-# Adjust the source path if your dx build output directory differs
-RUN cp -r /app/frontend/dist/* /app/backend/static/ || true
-
-# --- Build backend in release mode ---
+# Build backend
 RUN cargo build --release
 
-# ========= 2) Runtime image (smaller) =========
+# ===== Stage 2: Runtime =====
 FROM debian:bookworm-slim
 
-# Install system dependencies for Rust binaries (OpenSSL, etc.)
+WORKDIR /app/backend
+
+# Install SSL lib for runtime
 RUN apt-get update && \
     apt-get install -y libssl-dev && \
     rm -rf /var/lib/apt/lists/*
 
-# Set working directory
-WORKDIR /app
+# Copy built backend
+COPY --from=builder /app/backend/target/release/backend .
 
-# Copy only the built backend binary and static files
-COPY --from=builder /app/backend/target/release/backend /app/backend
-COPY --from=builder /app/backend/static /app/static
+# Copy static files
+COPY --from=builder /app/backend/static ./static
 
-# Expose the port your Axum server listens on (change if different)
+# Expose port and run
 EXPOSE 3000
-
-# Run the backend binary
 CMD ["./backend"]
