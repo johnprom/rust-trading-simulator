@@ -19,3 +19,9 @@ Cargo.lock
 node_modules/
 dist/
 
+# Database files
+data/
+*.db
+*.db-shm
+*.db-wal
+

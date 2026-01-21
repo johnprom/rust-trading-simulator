@@ -17,6 +17,7 @@ RUN dx build --release
 WORKDIR /app/backend
 COPY backend/Cargo.toml backend/Cargo.lock* ./
 COPY backend/src ./src
+COPY backend/migrations ./migrations
 RUN cargo build --release
 
 # Runtime
@@ -27,10 +28,18 @@ RUN apt-get update && \
     apt-get install -y ca-certificates libssl3 && \
     rm -rf /var/lib/apt/lists/*
 
+# Create data directory for SQLite database with proper permissions
+RUN mkdir -p /app/data && chmod 777 /app/data
+
 COPY --from=builder /app/backend/target/release/backend ./backend
 COPY --from=builder /app/frontend/target/dx/frontend/release/web/public ./static
+COPY --from=builder /app/backend/migrations ./migrations
+
+# Ensure backend is executable
+RUN chmod +x ./backend
 
 EXPOSE 3000
+VOLUME ["/app/data"]
 CMD ["./backend"]
 
 # # ===== Stage 1: Build =====
