@@ -27,21 +27,32 @@ pub async fn execute_trade(
 
     let total_cost = price * quantity;
 
+    // Check balances first before attempting the trade
+    let user = state.get_user(user_id).await.ok_or(TradeError::UserNotFound)?;
+
+    match side {
+        TradeSide::Buy => {
+            if user.cash_balance < total_cost {
+                return Err(TradeError::InsufficientFunds);
+            }
+        }
+        TradeSide::Sell => {
+            let balance = user.asset_balances.get(asset).copied().unwrap_or(0.0);
+            if balance < quantity {
+                return Err(TradeError::InsufficientAssets);
+            }
+        }
+    }
+
+    // Execute the trade
     state
         .update_user(user_id, |user| {
             match side {
                 TradeSide::Buy => {
-                    if user.cash_balance < total_cost {
-                        return;
-                    }
                     user.cash_balance -= total_cost;
                     *user.asset_balances.entry(asset.to_string()).or_insert(0.0) += quantity;
                 }
                 TradeSide::Sell => {
-                    let balance = user.asset_balances.get(asset).copied().unwrap_or(0.0);
-                    if balance < quantity {
-                        return;
-                    }
                     *user.asset_balances.get_mut(asset).unwrap() -= quantity;
                     user.cash_balance += total_cost;
                 }

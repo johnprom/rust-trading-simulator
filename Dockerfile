@@ -1,4 +1,4 @@
-FROM rust:1.82-slim AS builder
+FROM rustlang/rust:nightly-slim AS builder
 WORKDIR /app
 
 RUN apt-get update && \
@@ -8,8 +8,9 @@ RUN apt-get update && \
 # Build frontend
 WORKDIR /app/frontend
 COPY frontend/Cargo.toml frontend/Cargo.lock* ./
+COPY frontend/Dioxus.toml ./
 COPY frontend/src ./src
-RUN cargo install dioxus-cli --locked
+RUN cargo install dioxus-cli --version 0.6.0 --locked
 RUN dx build --release
 
 # Build backend

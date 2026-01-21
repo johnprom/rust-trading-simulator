@@ -1,0 +1,12 @@
+[application]
+name = "frontend"
+
+[web.app]
+title = "Trading Simulator"
+base_path = ""
+
+[web.watcher]
+
+[web.resource.dev]
+style = []
+script = []

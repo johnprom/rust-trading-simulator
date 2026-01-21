@@ -1,0 +1,7 @@
+target/
+**/target/
+.git/
+.gitignore
+README.md
+project_plan.md
+*.md

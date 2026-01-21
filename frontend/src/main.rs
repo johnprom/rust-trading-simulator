@@ -22,6 +22,11 @@ struct TradeRequest {
     quantity: f64,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+struct TradeErrorResponse {
+    error: String,
+}
+
 const API_BASE: &str = "http://localhost:3000/api";
 
 fn App() -> Element {
@@ -62,7 +67,7 @@ fn App() -> Element {
     let execute_trade = move |side: &str| {
         let side = side.to_string();
         let qty = quantity().parse::<f64>().unwrap_or(0.0);
-        
+
         spawn(async move {
             let trade = TradeRequest {
                 asset: "BTC".to_string(),
@@ -77,9 +82,20 @@ fn App() -> Element {
                 .send()
                 .await
             {
-                Ok(_) => {
-                    status.set(format!("{} successful!", side));
-                    fetch_portfolio();
+                Ok(response) => {
+                    if response.status().is_success() {
+                        status.set(format!("{} successful!", side));
+                        fetch_portfolio();
+                    } else {
+                        // Capture status before consuming response
+                        let status_code = response.status();
+                        // Try to parse the error message from the response
+                        if let Ok(error_resp) = response.json::<TradeErrorResponse>().await {
+                            status.set(error_resp.error);
+                        } else {
+                            status.set(format!("Trade failed: {}", status_code));
+                        }
+                    }
                 }
                 Err(e) => status.set(format!("Error: {}", e)),
             }
