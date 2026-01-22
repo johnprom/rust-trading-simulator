@@ -53,7 +53,15 @@ impl ApiClient {
     }
 
     pub async fn fetch_btc_price(&self) -> Result<PricePoint, ApiError> {
-        let url = format!("{}/prices/BTC-USD/spot", self.base_url);
+        self.fetch_price("BTC", "USD").await
+    }
+
+    pub async fn fetch_eth_price(&self) -> Result<PricePoint, ApiError> {
+        self.fetch_price("ETH", "USD").await
+    }
+
+    pub async fn fetch_price(&self, base: &str, quote: &str) -> Result<PricePoint, ApiError> {
+        let url = format!("{}/prices/{}-{}/spot", self.base_url, base, quote);
 
         let response: CoinbaseResponse = self.client
             .get(&url)
@@ -69,7 +77,7 @@ impl ApiClient {
 
         Ok(PricePoint {
             timestamp: Utc::now(),
-            asset: "BTC".to_string(),
+            asset: base.to_string(),
             price,
         })
     }
@@ -79,13 +87,15 @@ impl ApiClient {
     /// We'll use 60 (1 minute) for the best granularity
     pub async fn fetch_historical_candles(
         &self,
+        asset: &str,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
         granularity: i64,
     ) -> Result<Vec<(DateTime<Utc>, f64)>, ApiError> {
         // Use Coinbase Advanced Trade API for historical data
         let url = format!(
-            "https://api.exchange.coinbase.com/products/BTC-USD/candles?start={}&end={}&granularity={}",
+            "https://api.exchange.coinbase.com/products/{}-USD/candles?start={}&end={}&granularity={}",
+            asset,
             start.to_rfc3339(),
             end.to_rfc3339(),
             granularity
@@ -132,6 +142,7 @@ impl ApiClient {
 
     /// Interpolate between candles to create smooth 5-second data points
     pub fn interpolate_candles(
+        asset: &str,
         candles: Vec<(DateTime<Utc>, f64)>,
         target_interval_secs: i64,
     ) -> Vec<PricePoint> {
@@ -140,7 +151,7 @@ impl ApiClient {
                 .into_iter()
                 .map(|(timestamp, price)| PricePoint {
                     timestamp,
-                    asset: "BTC".to_string(),
+                    asset: asset.to_string(),
                     price,
                 })
                 .collect();
@@ -163,7 +174,7 @@ impl ApiClient {
 
                 result.push(PricePoint {
                     timestamp: interpolated_time,
-                    asset: "BTC".to_string(),
+                    asset: asset.to_string(),
                     price: interpolated_price,
                 });
             }
@@ -173,7 +184,7 @@ impl ApiClient {
         if let Some((last_time, last_price)) = candles.last() {
             result.push(PricePoint {
                 timestamp: *last_time,
-                asset: "BTC".to_string(),
+                asset: asset.to_string(),
                 price: *last_price,
             });
         }

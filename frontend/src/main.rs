@@ -536,10 +536,17 @@ fn App() -> Element {
                             h1 { style: "margin: 0;", "🚀 Trading Simulator - Dashboard" }
                             p { style: "color: #666; margin: 5px 0 0 0;", "Logged in as: {username}" }
                         }
-                        button {
-                            onclick: move |_| handle_logout(),
-                            style: "padding: 10px 20px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;",
-                            "Logout"
+                        div { style: "display: flex; gap: 10px;",
+                            button {
+                                onclick: move |_| current_view.set(AppView::Markets),
+                                style: "padding: 10px 20px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;",
+                                "Markets"
+                            }
+                            button {
+                                onclick: move |_| handle_logout(),
+                                style: "padding: 10px 20px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;",
+                                "Logout"
+                            }
                         }
                     }
 
@@ -627,26 +634,138 @@ fn App() -> Element {
                     }
                 },
                 AppView::Markets => rsx! {
-                    div { "Markets view - Coming soon" }
-                },
-                AppView::Trading(_asset) => rsx! {
                     div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;",
                         div {
-                            h1 { style: "margin: 0;", "🚀 Trading Simulator" }
+                            h1 { style: "margin: 0;", "🚀 Trading Simulator - Markets" }
                             p { style: "color: #666; margin: 5px 0 0 0;", "Logged in as: {username}" }
                         }
-                        button {
-                            onclick: move |_| handle_logout(),
-                            style: "padding: 10px 20px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;",
-                            "Logout"
+                        div { style: "display: flex; gap: 10px;",
+                            button {
+                                onclick: move |_| current_view.set(AppView::Dashboard),
+                                style: "padding: 10px 20px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;",
+                                "Dashboard"
+                            }
+                            button {
+                                onclick: move |_| handle_logout(),
+                                style: "padding: 10px 20px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;",
+                                "Logout"
+                            }
+                        }
+                    }
+
+                    h2 { "Available Markets" }
+                    p { style: "color: #666; margin-bottom: 30px;", "Click on a market to start trading" }
+
+                    div { style: "display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px;",
+                        // BTC/USD Market
+                        div {
+                            onclick: move |_| current_view.set(AppView::Trading("BTC".to_string())),
+                            style: "background: white; padding: 20px; border-radius: 8px; border: 2px solid #ddd; cursor: pointer; transition: all 0.2s; hover: border-color: #2196F3;",
+                            div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;",
+                                h3 { style: "margin: 0; font-size: 24px;", "BTC/USD" }
+                                p { style: "margin: 0; font-size: 28px; font-weight: bold; color: #2196F3;", "${price:.2}" }
+                            }
+                            p { style: "color: #666; font-size: 14px; margin-bottom: 15px;", "Bitcoin" }
+                            if !price_history().is_empty() {
+                                div { style: "height: 120px; background: #f5f5f5; border-radius: 4px; display: flex; align-items: center; justify-content: center;",
+                                    svg {
+                                        width: "100%",
+                                        height: "100",
+                                        view_box: "0 0 300 100",
+                                        {
+                                            let prices = price_history();
+                                            let min = prices.iter().map(|p| p.price).fold(f64::INFINITY, f64::min);
+                                            let max = prices.iter().map(|p| p.price).fold(f64::NEG_INFINITY, f64::max);
+                                            let range = if (max - min).abs() < 0.01 { 1.0 } else { max - min };
+
+                                            let mut path = String::from("M ");
+                                            for (i, point) in prices.iter().enumerate() {
+                                                let x = (i as f64 / (prices.len() - 1) as f64) * 300.0;
+                                                let y = 100.0 - ((point.price - min) / range) * 100.0;
+                                                if i == 0 {
+                                                    path.push_str(&format!("{} {} ", x, y));
+                                                } else {
+                                                    path.push_str(&format!("L {} {} ", x, y));
+                                                }
+                                            }
+
+                                            rsx! {
+                                                path {
+                                                    d: "{path}",
+                                                    fill: "none",
+                                                    stroke: "#2196F3",
+                                                    stroke_width: "2"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                div { style: "height: 120px; background: #f5f5f5; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #999;",
+                                    "Loading chart..."
+                                }
+                            }
+                        }
+
+                        // ETH/USD Market (placeholder with simulated price)
+                        div {
+                            onclick: move |_| current_view.set(AppView::Trading("ETH".to_string())),
+                            style: "background: white; padding: 20px; border-radius: 8px; border: 2px solid #ddd; cursor: pointer; transition: all 0.2s;",
+                            div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;",
+                                h3 { style: "margin: 0; font-size: 24px;", "ETH/USD" }
+                                p { style: "margin: 0; font-size: 28px; font-weight: bold; color: #9c27b0;", "$--" }
+                            }
+                            p { style: "color: #666; font-size: 14px; margin-bottom: 15px;", "Ethereum" }
+                            div { style: "height: 120px; background: #f5f5f5; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #999;",
+                                "Coming soon"
+                            }
+                        }
+
+                        // BTC/ETH Market (placeholder)
+                        div {
+                            onclick: move |_| current_view.set(AppView::Trading("BTCETH".to_string())),
+                            style: "background: white; padding: 20px; border-radius: 8px; border: 2px solid #ddd; cursor: pointer; transition: all 0.2s;",
+                            div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;",
+                                h3 { style: "margin: 0; font-size: 24px;", "BTC/ETH" }
+                                p { style: "margin: 0; font-size: 28px; font-weight: bold; color: #ff9800;", "--" }
+                            }
+                            p { style: "color: #666; font-size: 14px; margin-bottom: 15px;", "Bitcoin / Ethereum" }
+                            div { style: "height: 120px; background: #f5f5f5; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #999;",
+                                "Coming soon"
+                            }
+                        }
+                    }
+                },
+                AppView::Trading(asset) => rsx! {
+                    div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;",
+                        div {
+                            h1 { style: "margin: 0;", "🚀 Trading Simulator - {asset}/USD" }
+                            p { style: "color: #666; margin: 5px 0 0 0;", "Logged in as: {username}" }
+                        }
+                        div { style: "display: flex; gap: 10px;",
+                            button {
+                                onclick: move |_| current_view.set(AppView::Dashboard),
+                                style: "padding: 10px 20px; background: #4caf50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;",
+                                "Dashboard"
+                            }
+                            button {
+                                onclick: move |_| current_view.set(AppView::Markets),
+                                style: "padding: 10px 20px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;",
+                                "Markets"
+                            }
+                            button {
+                                onclick: move |_| handle_logout(),
+                                style: "padding: 10px 20px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;",
+                                "Logout"
+                            }
                         }
                     }
 
                     div { class: "price-display",
                         style: "background: #f0f0f0; padding: 20px; border-radius: 8px; margin: 20px 0;",
-                        h2 { "BTC Price" }
+                        h2 { "{asset} Price" }
                         p { style: "font-size: 32px; font-weight: bold;",
-                            "${price:0.2}"
+                            "${price:.2}"
                         }
                     }
 
@@ -666,15 +785,15 @@ fn App() -> Element {
                             style: "background: #e8f5e9; padding: 20px; border-radius: 8px; margin: 20px 0;",
                             h2 { "Portfolio" }
                             p { "Cash: ${p.cash_balance:.2}" }
-                            p { "BTC: {p.asset_balances.get(\"BTC\").unwrap_or(&0.0):.8}" }
+                            p { "{asset}: {p.asset_balances.get(&asset).unwrap_or(&0.0):.8}" }
                         }
                     }
 
                     div { class: "trade-form",
                         style: "background: #fff3e0; padding: 20px; border-radius: 8px;",
-                        h2 { "Trade" }
+                        h2 { "Trade {asset}" }
 
-                        label { "Quantity (BTC):" }
+                        label { "Quantity ({asset}):" }
                         input {
                             r#type: "number",
                             step: "0.001",
@@ -687,12 +806,12 @@ fn App() -> Element {
                             button {
                                 onclick: move |_| execute_trade("Buy"),
                                 style: "flex: 1; padding: 12px; background: #4caf50; color: white; border: none; border-radius: 4px; cursor: pointer;",
-                                "Buy BTC"
+                                "Buy {asset}"
                             }
                             button {
                                 onclick: move |_| execute_trade("Sell"),
                                 style: "flex: 1; padding: 12px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer;",
-                                "Sell BTC"
+                                "Sell {asset}"
                             }
                         }
 

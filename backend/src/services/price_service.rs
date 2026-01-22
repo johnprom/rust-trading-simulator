@@ -4,37 +4,37 @@ use std::time::Duration;
 use tokio::time;
 use tracing::{error, info};
 
-pub async fn start_price_polling(state: AppState) {
+async fn backfill_and_poll_asset(state: AppState, asset: &str) {
     let api_client = ApiClient::new();
 
-    info!("Backfilling price data for last hour...");
+    info!("Backfilling {} price data for last hour...", asset);
 
     // Fetch real historical data from Coinbase and interpolate to 5-second intervals
     let now = Utc::now();
     let one_hour_ago = now - ChronoDuration::hours(1);
 
-    match api_client.fetch_historical_candles(one_hour_ago, now, 60).await {
+    match api_client.fetch_historical_candles(asset, one_hour_ago, now, 60).await {
         Ok(candles) => {
-            info!("Fetched {} minute candles from Coinbase", candles.len());
+            info!("Fetched {} minute candles for {} from Coinbase", candles.len(), asset);
 
             // Interpolate to 5-second intervals
-            let interpolated = crate::api_client::ApiClient::interpolate_candles(candles, 5);
+            let interpolated = crate::api_client::ApiClient::interpolate_candles(asset, candles, 5);
 
-            info!("Interpolated to {} data points", interpolated.len());
+            info!("Interpolated to {} data points for {}", interpolated.len(), asset);
 
             // Add all interpolated points to state
             for point in interpolated {
                 state.add_price_point(point).await;
             }
 
-            info!("Backfilled historical price data successfully");
+            info!("Backfilled {} historical price data successfully", asset);
         }
         Err(e) => {
-            error!("Failed to fetch historical data: {}", e);
-            info!("Falling back to simulated data");
+            error!("Failed to fetch {} historical data: {}", asset, e);
+            info!("Falling back to simulated data for {}", asset);
 
             // Fallback: generate simulated data if API fails
-            match api_client.fetch_btc_price().await {
+            match api_client.fetch_price(asset, "USD").await {
                 Ok(current_price) => {
                     let base_price = current_price.price;
 
@@ -50,37 +50,52 @@ pub async fn start_price_polling(state: AppState) {
 
                         let point = PricePoint {
                             timestamp,
-                            asset: "BTC".to_string(),
+                            asset: asset.to_string(),
                             price,
                         };
 
                         state.add_price_point(point).await;
                     }
 
-                    info!("Backfilled with simulated data");
+                    info!("Backfilled {} with simulated data", asset);
                 }
                 Err(e2) => {
-                    error!("Failed to fetch current price for simulation: {}", e2);
+                    error!("Failed to fetch current {} price for simulation: {}", asset, e2);
                 }
             }
         }
     }
 
     let mut interval = time::interval(Duration::from_secs(5));
-    info!("Starting live price polling (5s interval)");
+    info!("Starting live {} price polling (5s interval)", asset);
 
     loop {
         interval.tick().await;
 
-        match api_client.fetch_btc_price().await {
+        match api_client.fetch_price(asset, "USD").await {
             Ok(price_point) => {
-                info!("Fetched BTC price: ${:.2}", price_point.price);
+                info!("Fetched {} price: ${:.2}", asset, price_point.price);
                 state.add_price_point(price_point).await;
             }
             Err(e) => {
-                error!("Failed to fetch price: {}", e);
+                error!("Failed to fetch {} price: {}", asset, e);
                 // Resiliency: Continue polling despite errors
             }
         }
     }
+}
+
+pub async fn start_price_polling(state: AppState) {
+    // Spawn separate tasks for each asset
+    let btc_state = state.clone();
+    tokio::spawn(async move {
+        backfill_and_poll_asset(btc_state, "BTC").await;
+    });
+
+    let eth_state = state.clone();
+    tokio::spawn(async move {
+        backfill_and_poll_asset(eth_state, "ETH").await;
+    });
+
+    info!("Started price polling for BTC and ETH");
 }
