@@ -511,7 +511,7 @@ fn App() -> Element {
             match current_view() {
                 AppView::Auth => rsx! {
                     div { style: "max-width: 500px; margin: 100px auto; text-align: center;",
-                        h1 { style: "margin-bottom: 40px;", "🚀 Trading Simulator" }
+                        h1 { style: "margin-bottom: 40px;", "Trading Simulator" }
 
                         div { style: "background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);",
                             h2 { style: "margin-bottom: 30px;", "Welcome" }
@@ -566,10 +566,15 @@ fn App() -> Element {
                 AppView::Dashboard => rsx! {
                     div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;",
                         div {
-                            h1 { style: "margin: 0;", "🚀 Trading Simulator - Dashboard" }
+                            h1 { style: "margin: 0;", "Trading Simulator - Dashboard" }
                             p { style: "color: #666; margin: 5px 0 0 0;", "Logged in as: {username}" }
                         }
                         div { style: "display: flex; gap: 10px;",
+                            button {
+                                disabled: true,
+                                style: "padding: 10px 20px; background: #ccc; color: #666; border: none; border-radius: 4px; cursor: default; font-size: 14px; font-weight: bold;",
+                                "Dashboard"
+                            }
                             button {
                                 onclick: move |_| current_view.set(AppView::Markets),
                                 style: "padding: 10px 20px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;",
@@ -587,8 +592,16 @@ fn App() -> Element {
                         div { class: "portfolio",
                             style: "background: #e8f5e9; padding: 20px; border-radius: 8px; margin: 20px 0;",
                             h2 { "Portfolio" }
-                            p { style: "font-size: 18px;", "Cash: ${p.cash_balance:.2}" }
-                            p { style: "font-size: 18px;", "BTC: {p.asset_balances.get(\"BTC\").unwrap_or(&0.0):.8}" }
+                            p { style: "font-size: 18px; font-weight: bold; margin-bottom: 10px;", "Cash: ${p.cash_balance:.2}" }
+
+                            if !p.asset_balances.is_empty() {
+                                h3 { style: "margin-top: 20px; margin-bottom: 10px;", "Assets" }
+                                for (asset, balance) in p.asset_balances.iter() {
+                                    if *balance > 0.0 {
+                                        p { style: "font-size: 16px; margin: 5px 0;", "{asset}: {balance:.8}" }
+                                    }
+                                }
+                            }
                         }
 
                         // Trade History
@@ -635,41 +648,11 @@ fn App() -> Element {
                             }
                         }
                     }
-
-                    div { style: "background: #fff3e0; padding: 20px; border-radius: 8px; margin: 20px 0;",
-                        h2 { "Quick Trade - BTC" }
-
-                        label { "Quantity (BTC):" }
-                        input {
-                            r#type: "number",
-                            step: "0.001",
-                            value: "{quantity}",
-                            oninput: move |e| quantity.set(e.value()),
-                            style: "margin: 10px 0; padding: 8px; width: 100%;",
-                        }
-
-                        div { style: "display: flex; gap: 10px; margin-top: 10px;",
-                            button {
-                                onclick: move |_| execute_trade("Buy", "BTC"),
-                                style: "flex: 1; padding: 12px; background: #4caf50; color: white; border: none; border-radius: 4px; cursor: pointer;",
-                                "Buy BTC"
-                            }
-                            button {
-                                onclick: move |_| execute_trade("Sell", "BTC"),
-                                style: "flex: 1; padding: 12px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer;",
-                                "Sell BTC"
-                            }
-                        }
-
-                        if !status().is_empty() {
-                            p { style: "margin-top: 10px; color: #666;", "{status}" }
-                        }
-                    }
                 },
                 AppView::Markets => rsx! {
                     div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;",
                         div {
-                            h1 { style: "margin: 0;", "🚀 Trading Simulator - Markets" }
+                            h1 { style: "margin: 0;", "Trading Simulator - Markets" }
                             p { style: "color: #666; margin: 5px 0 0 0;", "Logged in as: {username}" }
                         }
                         div { style: "display: flex; gap: 10px;",
@@ -677,6 +660,11 @@ fn App() -> Element {
                                 onclick: move |_| current_view.set(AppView::Dashboard),
                                 style: "padding: 10px 20px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;",
                                 "Dashboard"
+                            }
+                            button {
+                                disabled: true,
+                                style: "padding: 10px 20px; background: #ccc; color: #666; border: none; border-radius: 4px; cursor: default; font-size: 14px; font-weight: bold;",
+                                "Markets"
                             }
                             button {
                                 onclick: move |_| handle_logout(),
@@ -813,18 +801,18 @@ fn App() -> Element {
                         rsx! {
                             div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;",
                                 div {
-                                    h1 { style: "margin: 0;", "🚀 Trading Simulator - {asset}/USD" }
+                                    h1 { style: "margin: 0;", "Trading Simulator - {asset}/USD" }
                                     p { style: "color: #666; margin: 5px 0 0 0;", "Logged in as: {username}" }
                                 }
                                 div { style: "display: flex; gap: 10px;",
                                     button {
                                         onclick: move |_| current_view.set(AppView::Dashboard),
-                                        style: "padding: 10px 20px; background: #4caf50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;",
+                                        style: "padding: 10px 20px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;",
                                         "Dashboard"
                                     }
                                     button {
-                                        onclick: move |_| current_view.set(AppView::Markets),
-                                        style: "padding: 10px 20px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;",
+                                        disabled: true,
+                                        style: "padding: 10px 20px; background: #ccc; color: #666; border: none; border-radius: 4px; cursor: default; font-size: 14px; font-weight: bold;",
                                         "Markets"
                                     }
                                     button {
@@ -897,6 +885,64 @@ fn App() -> Element {
 
                                 if !status().is_empty() {
                                     p { style: "margin-top: 10px; color: #666;", "{status}" }
+                                }
+                            }
+
+                            // Trade History filtered by asset
+                            if let Some(p) = portfolio() {
+                                div { class: "trade-history",
+                                    style: "background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #ddd;",
+                                    h2 { "{asset} Trade History" }
+                                    {
+                                        let filtered_trades: Vec<_> = p.trade_history.iter()
+                                            .filter(|t| t.asset == asset)
+                                            .collect();
+
+                                        if filtered_trades.is_empty() {
+                                            rsx! {
+                                                p { style: "color: #666;", "No {asset} trades yet" }
+                                            }
+                                        } else {
+                                            rsx! {
+                                                div { style: "overflow-x: auto;",
+                                                    table { style: "width: 100%; border-collapse: collapse;",
+                                                        thead {
+                                                            tr { style: "border-bottom: 2px solid #ddd;",
+                                                                th { style: "padding: 10px; text-align: left;", "Side" }
+                                                                th { style: "padding: 10px; text-align: right;", "Quantity" }
+                                                                th { style: "padding: 10px; text-align: right;", "Price" }
+                                                                th { style: "padding: 10px; text-align: right;", "Total" }
+                                                                th { style: "padding: 10px; text-align: left;", "Time" }
+                                                            }
+                                                        }
+                                                        tbody {
+                                                            for trade in filtered_trades.iter().rev().take(10) {
+                                                                tr { style: "border-bottom: 1px solid #eee;",
+                                                                    td {
+                                                                        style: if matches!(trade.side, TradeSide::Buy) {
+                                                                            "padding: 10px; color: #4caf50; font-weight: bold;"
+                                                                        } else {
+                                                                            "padding: 10px; color: #f44336; font-weight: bold;"
+                                                                        },
+                                                                        "{trade.side:?}"
+                                                                    }
+                                                                    td { style: "padding: 10px; text-align: right;", "{trade.quantity:.8}" }
+                                                                    td { style: "padding: 10px; text-align: right;", "${trade.price:.2}" }
+                                                                    td { style: "padding: 10px; text-align: right;", "${trade.price * trade.quantity:.2}" }
+                                                                    td { style: "padding: 10px;", "{format_timestamp(&trade.timestamp)}" }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                if filtered_trades.len() > 10 {
+                                                    p { style: "margin-top: 10px; color: #666; font-size: 14px;",
+                                                        "Showing last 10 of {filtered_trades.len()} {asset} trades"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }

@@ -3,6 +3,21 @@
 ## Objective
 Full-stack local trading simulator with a Rust backend (Axum) and Dioxus frontend, enabling users to simulate trading strategies, visualize market data, and interact with a portfolio in real-time.
 
+## Current Status: Phase 2 Complete ✅
+
+**Live Features:**
+- 🔐 User authentication (login/signup/guest mode)
+- 💰 Multi-asset trading (BTC/USD, ETH/USD)
+- 📊 Real-time price charts (1-hour history, 5s intervals)
+- 📈 Live price polling from Coinbase API
+- 💼 Portfolio management with persistent storage
+- 📜 Complete trade history tracking (filtered by asset)
+- 🗂️ Multi-tab UI (Dashboard, Markets, Trading)
+- 💾 SQLite database with user persistence
+- 🐳 Docker deployment ready
+
+**Next Phase:** Bot framework and automated trading strategies
+
 ## Core Principles
 - **Resiliency**: Maintain in-memory sliding windows of price data to ensure continuous availability for bots and charts, even if the API fails temporarily.
 - **Granularity**: Track fine-grained data (5s intervals) in memory; aggregate for charts or coarser intervals as needed.
@@ -71,7 +86,7 @@ Full-stack local trading simulator with a Rust backend (Axum) and Dioxus fronten
 
 
 
-### Phase 2 – Persistence & Historical Data ⏳ (IN PROGRESS)
+### Phase 2 – Persistence & Historical Data ✅ (COMPLETED)
 
 **Persistence** ✅ (COMPLETED)
 - ✅ Database setup (SQLite)
@@ -124,22 +139,32 @@ Full-stack local trading simulator with a Rust backend (Axum) and Dioxus fronten
 - Falls back to simulated data if API fails
 - User-Agent header required for Coinbase API requests
 
-**Trading History** (MOVED TO PHASE 2)
-- [ ] Trade history storage in UserData
-- [ ] Persist trades to database
-- [ ] Display last 10 trades with expand option
-- [ ] Filter trades by asset in trading view
-- [ ] Show all trades in dashboard
+**Trading History** ✅ (COMPLETED)
+- ✅ Trade history storage in UserData (Vec<Trade>)
+- ✅ Persist trades to database (JSON serialization in SQLite)
+- ✅ Display last 10 trades in Dashboard (with count message)
+- ✅ Filter trades by asset in trading view
+- ✅ Show all trades (unfiltered) in dashboard
+- ✅ Timestamp formatting for trade display
 
-**Multi-Asset Support** (MOVED TO PHASE 2)
-- [ ] Support 3 predetermined markets: BTC/USD, ETH/USD, BTC/ETH
-- [ ] Multiple price polling services for each asset
-- [ ] Tabular navigation structure:
-  - [ ] Dashboard tab (balances, name, all trade history)
-  - [ ] Markets tab (preview of 3 markets with graphs)
-  - [ ] Trading view (per-asset trading interface)
-- [ ] Asset-specific price windows
-- [ ] Trade form with asset context
+**Multi-Asset Support** ✅ (COMPLETED)
+- ✅ Support 2 active markets: BTC/USD, ETH/USD
+- ✅ Multiple price polling services for each asset (separate tokio tasks)
+- ✅ Tabular navigation structure:
+  - ✅ Dashboard tab (all balances, name, all trade history)
+  - ✅ Markets tab (preview of BTC and ETH with live graphs and prices)
+  - ✅ Trading view (per-asset trading interface with filtered history)
+- ✅ Asset-specific price windows (720 points per asset)
+- ✅ Trade form with dynamic asset context
+- ✅ Active tab highlighting in navigation
+- ✅ Multi-asset portfolio display
+
+**Design Decision: Multi-Asset Implementation**
+- Implemented BTC/USD and ETH/USD (2 of 3 planned markets)
+- BTC/ETH cross-pair deferred to future phase (requires price calculation)
+- Backend price service spawns independent tasks per asset
+- Frontend maintains separate price/history signals per asset
+- Trading service already asset-agnostic (works with any asset string)
 
 
 
@@ -228,11 +253,13 @@ Full-stack local trading simulator with a Rust backend (Axum) and Dioxus fronten
 | 2 | Login/signup | Backend/Frontend | ✅ Complete |
 | 2 | 1-hour price graph | Frontend | ✅ Complete |
 | 2 | Historical data backfill | Backend | ✅ Complete |
-| 2 | Bot integration | Backend | Pending |
+| 2 | Trading history | Backend/Frontend | ✅ Complete |
+| 2 | Multi-asset support (BTC/ETH) | Backend/Frontend | ✅ Complete |
+| 2 | Multi-tab navigation | Frontend | ✅ Complete |
+| 3 | Bot framework | Backend | Pending |
 | 3 | Mock deposit/withdraw | Frontend/Backend | Pending |
-| 3 | Trading history | Backend/Frontend | Pending |
-| 3 | Multi-asset support | Backend/Frontend | Pending |
 | 3 | Interactive graphs | Frontend | Pending |
+| 3 | BTC/ETH cross-pair | Backend/Frontend | Pending |
 | 4 | UX improvements | Frontend | Pending |
 | 4 | Async trading bots | Backend | Pending |
 | 4 | WebSockets | Backend/Frontend | Pending |
@@ -295,33 +322,46 @@ docker logs sim -f
 ### Current Status & Next Steps
 
 **Phase 1 (MVP)** ✅ Complete
-**Phase 2 Progress:** Persistence, Authentication, and Charts complete. **Bot framework** remains as the final Phase 2 task.
+**Phase 2 (Persistence & Historical Data)** ✅ Complete
 
-**Recommended Next Steps:**
+**Completed in Phase 2:**
+- ✅ SQLite database with full CRUD operations
+- ✅ User authentication (login/signup/guest)
+- ✅ Password hashing with bcrypt
+- ✅ Trade history tracking (Vec<Trade> in UserData)
+- ✅ Multi-asset support (BTC/USD, ETH/USD)
+- ✅ Multi-tab navigation (Dashboard, Markets, Trading)
+- ✅ Asset-specific price charts and trade history
+- ✅ Live price polling for multiple assets (separate tasks per asset)
+- ✅ Active tab highlighting in navigation
 
-1. **Complete Phase 2 - Bot Framework** (Last remaining Phase 2 item)
-   - Create bot framework structure that reads price window
+**Recommended Next Steps (Phase 3):**
+
+1. **Bot Framework** (High Priority)
+   - Create bot trait/interface that reads price window
    - Implement placeholder bot strategies (no execution yet)
    - Add bot state tracking to AppState
-   - Design bot configuration storage
+   - Design bot configuration and storage
 
-2. **Begin Phase 3 - Trading History**
-   - Add trade_history field to UserData
-   - Persist trades to database
-   - Display trade history in frontend
-   - Add filtering/sorting capabilities
+2. **User Operations** (Medium Priority)
+   - Mock deposit/withdraw USD endpoints
+   - Frontend forms for deposits/withdrawals
+   - Balance validation and transaction history
 
-3. **Phase 3 - Multi-Asset Support**
-   - Extend price polling to support ETH, SOL, etc.
-   - Update trade form for asset selection
-   - Update portfolio display for multiple assets
-   - Multiple price charts
+3. **Additional Assets** (Optional)
+   - Add BTC/ETH cross-pair trading
+   - Consider adding more USD pairs (SOL, DOGE, etc.)
 
-4. **Phase 4 - Bot Execution**
-   - Enable/disable bots per user
-   - Spawn async tasks for bot execution
-   - Implement bot trading logic
-   - Add bot performance tracking
+4. **Chart Enhancements** (Low Priority)
+   - Interactive charts with zoom/pan
+   - Multiple timeframe selection (1h, 24h, 7d)
+   - Candlestick charts
+
+**Phase 4 Focus:**
+- Bot execution with async tasks
+- WebSocket support for real-time updates
+- Multiple bot strategies per user
+- Enhanced UX and styling
 
 **Key Achievements:**
 - Real historical data integration with interpolation
@@ -329,3 +369,6 @@ docker logs sim -f
 - SVG-based charting without external libraries
 - Database persistence with demo user reset behavior
 - Clean separation between guest and authenticated user experiences
+- Multi-asset trading with BTC and ETH
+- Comprehensive trade history tracking and display
+- Professional multi-tab navigation UI
