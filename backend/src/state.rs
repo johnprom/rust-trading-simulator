@@ -20,33 +20,24 @@ pub struct AppStateInner {
 
 impl AppState {
     pub async fn new(db: Database) -> Self {
-        // Load users from database
-        let users = crate::db::queries::load_all_users(db.pool())
+        // Delete demo user from database if it exists (demo user should reset on restart)
+        if let Err(e) = crate::db::queries::delete_user(db.pool(), &"demo_user".to_string()).await {
+            tracing::debug!("No demo user to delete: {}", e);
+        }
+
+        // Load authenticated users from database (demo_user is excluded)
+        let mut users = crate::db::queries::load_all_users(db.pool())
             .await
             .unwrap_or_else(|e| {
                 tracing::error!("Failed to load users from database: {}", e);
                 HashMap::new()
             });
 
-        // If no users exist, create demo user
-        // TODO: After Phase 2 authentication is complete, change this behavior:
-        // - Demo user should reset to $10,000 on every restart (not persist)
-        // - Only authenticated users should persist
-        // - Consider: delete demo_user from DB on startup if exists, or use separate in-memory demo
-        let users = if users.is_empty() {
-            let mut users = HashMap::new();
-            let demo_user = UserData::new("Demo User".to_string());
-            users.insert("demo_user".to_string(), demo_user.clone());
+        // Always create fresh demo user in memory only (not persisted)
+        let demo_user = UserData::new("Demo User".to_string());
+        users.insert("demo_user".to_string(), demo_user);
 
-            // Save demo user to database
-            if let Err(e) = crate::db::queries::save_user(db.pool(), &"demo_user".to_string(), &demo_user).await {
-                tracing::error!("Failed to save demo user: {}", e);
-            }
-
-            users
-        } else {
-            users
-        };
+        tracing::info!("Initialized with {} authenticated users + demo user", users.len() - 1);
 
         Self {
             inner: Arc::new(RwLock::new(AppStateInner {
@@ -104,17 +95,19 @@ impl AppState {
             Some(user) => {
                 f(user);
 
-                // Persist to database
-                let user_clone = user.clone();
-                let db_pool = self.db.pool().clone();
-                let user_id_clone = user_id.clone();
+                // Persist to database (but NOT demo_user - it's memory-only)
+                if user_id != "demo_user" {
+                    let user_clone = user.clone();
+                    let db_pool = self.db.pool().clone();
+                    let user_id_clone = user_id.clone();
 
-                // Spawn task to save to DB without blocking
-                tokio::spawn(async move {
-                    if let Err(e) = crate::db::queries::save_user(&db_pool, &user_id_clone, &user_clone).await {
-                        tracing::error!("Failed to persist user {} to database: {}", user_id_clone, e);
-                    }
-                });
+                    // Spawn task to save to DB without blocking
+                    tokio::spawn(async move {
+                        if let Err(e) = crate::db::queries::save_user(&db_pool, &user_id_clone, &user_clone).await {
+                            tracing::error!("Failed to persist user {} to database: {}", user_id_clone, e);
+                        }
+                    });
+                }
 
                 Ok(())
             }

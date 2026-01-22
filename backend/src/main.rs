@@ -74,7 +74,9 @@ async fn main() {
         .route("/price", get(routes::price::get_price))
         .route("/price/history", get(routes::price::get_price_history))
         .route("/portfolio", get(routes::portfolio::get_portfolio))
-        .route("/trade", post(routes::trade::post_trade));
+        .route("/trade", post(routes::trade::post_trade))
+        .route("/signup", post(routes::auth::signup))
+        .route("/login", post(routes::auth::login));
 
     let app = Router::new()
         .nest("/api", api_routes)

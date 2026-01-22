@@ -17,7 +17,7 @@ pub struct UserData {
     pub username: String,
     pub cash_balance: f64,
     pub asset_balances: HashMap<Asset, f64>,
-    // Phase 2: pub trade_history: Vec<Trade>,
+    pub trade_history: Vec<Trade>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,6 +42,7 @@ impl UserData {
             username,
             cash_balance: 10000.0, // Starting balance
             asset_balances: HashMap::new(),
+            trade_history: Vec::new(),
         }
     }
 }

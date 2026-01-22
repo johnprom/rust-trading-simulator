@@ -44,7 +44,17 @@ pub async fn execute_trade(
         }
     }
 
-    // Execute the trade
+    // Create trade record
+    let trade = Trade {
+        user_id: user_id.clone(),
+        asset: asset.to_string(),
+        side: side.clone(),
+        quantity,
+        price,
+        timestamp: chrono::Utc::now(),
+    };
+
+    // Execute the trade and record it in history
     state
         .update_user(user_id, |user| {
             match side {
@@ -57,16 +67,11 @@ pub async fn execute_trade(
                     user.cash_balance += total_cost;
                 }
             }
+            // Add trade to history
+            user.trade_history.push(trade.clone());
         })
         .await
         .map_err(|_| TradeError::UserNotFound)?;
 
-    Ok(Trade {
-        user_id: user_id.clone(),
-        asset: asset.to_string(),
-        side,
-        quantity,
-        price,
-        timestamp: chrono::Utc::now(),
-    })
+    Ok(trade)
 }

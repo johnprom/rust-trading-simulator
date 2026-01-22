@@ -71,52 +71,89 @@ Full-stack local trading simulator with a Rust backend (Axum) and Dioxus fronten
 
 
 
-### Phase 2 – Persistence & Historical Data
+### Phase 2 – Persistence & Historical Data ⏳ (IN PROGRESS)
 
-**Persistence**
-- [ ] Database setup (SQLite or Postgres)
-  - [ ] User profiles table
-  - [ ] Cash/asset balances
-  - [ ] Migration system
+**Persistence** ✅ (COMPLETED)
+- ✅ Database setup (SQLite)
+  - ✅ User profiles table with username, cash_balance, asset_balances, password_hash
+  - ✅ Migration system using sqlx migrations
+  - ✅ Named Docker volume (`trading-sim-data`) for data persistence across restarts
+  - ✅ Database queries for CRUD operations on users
+- ✅ Demo user behavior:
+  - ✅ Resets to $10,000 on every app restart (memory-only, not persisted)
+  - ✅ Deleted from DB on startup to ensure fresh state
+  - ✅ Only authenticated users persist to database
 
-**Authentication**
-- [ ] User registration endpoint
-- [ ] Login/logout endpoints
-- [ ] Session management or JWT tokens
-- [ ] Password hashing (bcrypt/argon2)
-- [ ] Frontend login/signup forms
+**Authentication** ✅ (COMPLETED)
+- ✅ User registration endpoint (`POST /api/signup`)
+- ✅ Login endpoint (`POST /api/login`)
+- ✅ Logout functionality (frontend clears session)
+- ✅ Password hashing with bcrypt (DEFAULT_COST)
+- ✅ UUID-based user IDs
+- ✅ Frontend authentication UI:
+  - ✅ Login form with username/password
+  - ✅ Signup form with validation (min 6 characters)
+  - ✅ "Continue as Guest" option for demo profile
+  - ✅ Logout button in trading view
+  - ✅ Input validation and error messages
+- ✅ Session approach: User ID stored client-side, sent with API requests (MVP approach)
+- ✅ Routes updated to accept `user_id` query parameter
 
-**Charts**
-- [ ] 1-hour price graph component
-- [ ] Aggregate data from 5s price window
-- [ ] Optional: Backfill historical data from API on startup
-- [ ] Chart library integration (e.g., plotters, charming)
+**Design Decision: Authentication Approach**
+- Chose simple MVP approach: user_id stored client-side and passed with requests
+- No session cookies or JWT tokens for initial version (keeps implementation simple)
+- Sufficient for local single-machine deployment
+- Can upgrade to proper session management later for hosted deployment
 
-**Bots**
+**Charts** ✅ (COMPLETED)
+- ✅ 1-hour price graph component (SVG-based)
+- ✅ Real-time data aggregation from 5s price window (720 points)
+- ✅ Backfill historical data from Coinbase API on startup
+  - ✅ Fetches 1-minute candles from Coinbase Exchange API
+  - ✅ Linear interpolation to 5-second intervals for smooth charts
+- ✅ Chart features:
+  - ✅ Grid lines (5 horizontal, 6 vertical)
+  - ✅ Axis labels (price in USD, time in minutes ago)
+  - ✅ Auto-scaling based on min/max prices
+  - ✅ Updates every 30 seconds
+- ✅ Custom SVG rendering (no external chart library needed)
+
+**Design Decision: Historical Data Strategy**
+- Coinbase Exchange API provides 1-minute granularity (not 5-second)
+- Implemented linear interpolation between 1-minute candles to create smooth 5s data
+- Falls back to simulated data if API fails
+- User-Agent header required for Coinbase API requests
+
+**Trading History** (MOVED TO PHASE 2)
+- [ ] Trade history storage in UserData
+- [ ] Persist trades to database
+- [ ] Display last 10 trades with expand option
+- [ ] Filter trades by asset in trading view
+- [ ] Show all trades in dashboard
+
+**Multi-Asset Support** (MOVED TO PHASE 2)
+- [ ] Support 3 predetermined markets: BTC/USD, ETH/USD, BTC/ETH
+- [ ] Multiple price polling services for each asset
+- [ ] Tabular navigation structure:
+  - [ ] Dashboard tab (balances, name, all trade history)
+  - [ ] Markets tab (preview of 3 markets with graphs)
+  - [ ] Trading view (per-asset trading interface)
+- [ ] Asset-specific price windows
+- [ ] Trade form with asset context
+
+
+
+### Phase 3 – Expanded Functionality & Bots
+
+**Bot Framework** (MOVED FROM PHASE 2)
 - [ ] Bot framework that can read price window
 - [ ] Placeholder bot strategies (no execution yet)
 - [ ] Bot state tracking structure
-
-
-
-### Phase 3 – Expanded Functionality
 
 **User Operations**
 - [ ] Mock deposit/withdraw USD endpoints
 - [ ] Frontend forms for deposits/withdrawals
 - [ ] Balance validation and updates
-
-**Trading History**
-- [ ] Persist trade history to database
-- [ ] Trades table schema
-- [ ] Frontend component to display trade history
-- [ ] Filtering/pagination for trade list
-
-**Multi-Asset Support**
-- [ ] Support multiple trading pairs (ETH, SOL, etc.)
-- [ ] Multiple price polling services
-- [ ] Asset selection in trade form
-- [ ] Portfolio display for multiple assets
 
 **Charts**
 - [ ] Interactive charts with variable time windows
@@ -187,9 +224,10 @@ Full-stack local trading simulator with a Rust backend (Axum) and Dioxus fronten
 | 1 | Trading logic | Backend | ✅ Complete |
 | 1 | Axum API endpoints | Backend | ✅ Complete |
 | 1 | Docker | DevOps | ✅ Complete |
-| 2 | Persistent storage | Backend | Pending |
-| 2 | Login/signup | Backend/Frontend | Pending |
-| 2 | 1-hour price graph | Frontend | Pending |
+| 2 | Persistent storage | Backend | ✅ Complete |
+| 2 | Login/signup | Backend/Frontend | ✅ Complete |
+| 2 | 1-hour price graph | Frontend | ✅ Complete |
+| 2 | Historical data backfill | Backend | ✅ Complete |
 | 2 | Bot integration | Backend | Pending |
 | 3 | Mock deposit/withdraw | Frontend/Backend | Pending |
 | 3 | Trading history | Backend/Frontend | Pending |
@@ -205,21 +243,32 @@ Full-stack local trading simulator with a Rust backend (Axum) and Dioxus fronten
 ### Files Implemented
 
 **Backend**
-- [backend/src/main.rs](backend/src/main.rs) - Axum server setup, API routes, static file serving
-- [backend/src/state.rs](backend/src/state.rs) - AppState with Arc<RwLock>, demo user initialization
+- [backend/src/main.rs](backend/src/main.rs) - Axum server setup, API routes, static file serving, database initialization
+- [backend/src/state.rs](backend/src/state.rs) - AppState with Arc<RwLock>, demo user reset behavior, database integration
 - [backend/src/models.rs](backend/src/models.rs) - Data structures (PricePoint, UserData, Trade, TradeSide)
-- [backend/src/api_client.rs](backend/src/api_client.rs) - Coinbase API client
-- [backend/src/services/price_service.rs](backend/src/services/price_service.rs) - Price polling every 5s
+- [backend/src/api_client.rs](backend/src/api_client.rs) - Coinbase API client with historical data fetching and interpolation
+- [backend/src/db/mod.rs](backend/src/db/mod.rs) - Database module with migration support
+- [backend/src/db/queries.rs](backend/src/db/queries.rs) - User CRUD operations, authentication queries
+- [backend/src/services/price_service.rs](backend/src/services/price_service.rs) - Price polling, historical data backfill
 - [backend/src/services/trading_service.rs](backend/src/services/trading_service.rs) - Trade execution logic
-- [backend/src/routes/price.rs](backend/src/routes/price.rs) - GET /api/price endpoint
-- [backend/src/routes/portfolio.rs](backend/src/routes/portfolio.rs) - GET /api/portfolio endpoint
-- [backend/src/routes/trade.rs](backend/src/routes/trade.rs) - POST /api/trade endpoint
+- [backend/src/services/auth_service.rs](backend/src/services/auth_service.rs) - Password hashing, user ID generation
+- [backend/src/routes/price.rs](backend/src/routes/price.rs) - GET /api/price, GET /api/price/history endpoints
+- [backend/src/routes/portfolio.rs](backend/src/routes/portfolio.rs) - GET /api/portfolio endpoint (with user_id)
+- [backend/src/routes/trade.rs](backend/src/routes/trade.rs) - POST /api/trade endpoint (with user_id)
+- [backend/src/routes/auth.rs](backend/src/routes/auth.rs) - POST /api/signup, POST /api/login endpoints
+- [backend/migrations/](backend/migrations/) - SQLite migrations for users table and password field
 
 **Frontend**
-- [frontend/src/main.rs](frontend/src/main.rs) - Dioxus single-page app with price display, portfolio, and trade form
+- [frontend/src/main.rs](frontend/src/main.rs) - Dioxus app with:
+  - Authentication UI (login/signup/guest)
+  - SVG-based price chart
+  - Portfolio display
+  - Trade form
+  - Logout functionality
 
 **DevOps**
 - [Dockerfile](Dockerfile) - Multi-stage build for frontend and backend
+- Docker volume: `trading-sim-data` for SQLite persistence
 
 ### Running the Project
 
@@ -227,13 +276,56 @@ Full-stack local trading simulator with a Rust backend (Axum) and Dioxus fronten
 # Build the Docker image
 docker build -t rust-trading-simulator .
 
-# Run the container
-docker run --name sim -p 3000:3000 rust-trading-simulator
+# Run the container (with persistent volume)
+docker run -d --name sim -p 3000:3000 -v trading-sim-data:/app/data rust-trading-simulator
 
 # Access in browser
 http://localhost:3000
+
+# Stop the container
+docker stop sim
+
+# Remove the container
+docker rm sim
+
+# View logs
+docker logs sim -f
 ```
 
-### Next Steps
+### Current Status & Next Steps
 
-The MVP (Phase 1) is complete. Ready to begin Phase 2 work on persistence and authentication.
+**Phase 1 (MVP)** ✅ Complete
+**Phase 2 Progress:** Persistence, Authentication, and Charts complete. **Bot framework** remains as the final Phase 2 task.
+
+**Recommended Next Steps:**
+
+1. **Complete Phase 2 - Bot Framework** (Last remaining Phase 2 item)
+   - Create bot framework structure that reads price window
+   - Implement placeholder bot strategies (no execution yet)
+   - Add bot state tracking to AppState
+   - Design bot configuration storage
+
+2. **Begin Phase 3 - Trading History**
+   - Add trade_history field to UserData
+   - Persist trades to database
+   - Display trade history in frontend
+   - Add filtering/sorting capabilities
+
+3. **Phase 3 - Multi-Asset Support**
+   - Extend price polling to support ETH, SOL, etc.
+   - Update trade form for asset selection
+   - Update portfolio display for multiple assets
+   - Multiple price charts
+
+4. **Phase 4 - Bot Execution**
+   - Enable/disable bots per user
+   - Spawn async tasks for bot execution
+   - Implement bot trading logic
+   - Add bot performance tracking
+
+**Key Achievements:**
+- Real historical data integration with interpolation
+- Secure authentication with bcrypt
+- SVG-based charting without external libraries
+- Database persistence with demo user reset behavior
+- Clean separation between guest and authenticated user experiences

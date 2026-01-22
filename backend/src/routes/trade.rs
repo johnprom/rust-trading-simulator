@@ -1,5 +1,5 @@
 use crate::{models::*, services::trading_service::{self, TradeError}, state::AppState};
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{extract::{State, Query}, http::StatusCode, Json};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
@@ -9,6 +9,11 @@ pub struct TradeRequest {
     pub quantity: f64,
 }
 
+#[derive(Deserialize)]
+pub struct TradeQuery {
+    pub user_id: String,
+}
+
 #[derive(Serialize)]
 pub struct TradeErrorResponse {
     pub error: String,
@@ -16,11 +21,12 @@ pub struct TradeErrorResponse {
 
 pub async fn post_trade(
     State(state): State<AppState>,
+    Query(query): Query<TradeQuery>,
     Json(req): Json<TradeRequest>,
 ) -> Result<Json<Trade>, (StatusCode, Json<TradeErrorResponse>)> {
     match trading_service::execute_trade(
         &state,
-        &"demo_user".to_string(),
+        &query.user_id,
         &req.asset,
         req.side,
         req.quantity,
