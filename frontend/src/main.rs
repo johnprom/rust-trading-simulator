@@ -255,24 +255,28 @@ fn App() -> Element {
     let mut user_id = use_signal(|| String::new());
     let mut username = use_signal(|| String::new());
 
-    let mut price = use_signal(|| 0.0);
+    // Multi-asset price tracking
+    let mut btc_price = use_signal(|| 0.0);
+    let mut eth_price = use_signal(|| 0.0);
+    let mut btc_history = use_signal(|| Vec::<PricePoint>::new());
+    let mut eth_history = use_signal(|| Vec::<PricePoint>::new());
+
     let mut portfolio = use_signal(|| None::<UserData>);
     let mut quantity = use_signal(|| String::from("0.01"));
     let mut status = use_signal(|| String::from(""));
-    let mut price_history = use_signal(|| Vec::<PricePoint>::new());
 
     // Auth form state
     let mut auth_username = use_signal(|| String::new());
     let mut auth_password = use_signal(|| String::new());
     let mut auth_error = use_signal(|| String::new());
 
-    // Fetch price on mount and every 5 seconds
+    // Fetch BTC price on mount and every 5 seconds
     use_effect(move || {
         spawn(async move {
             loop {
-                if let Ok(resp) = reqwest::get(format!("{}/price", API_BASE)).await {
+                if let Ok(resp) = reqwest::get(format!("{}/price?asset=BTC", API_BASE)).await {
                     if let Ok(data) = resp.json::<PriceResponse>().await {
-                        price.set(data.price);
+                        btc_price.set(data.price);
                     }
                 }
                 gloo_timers::future::TimeoutFuture::new(5_000).await;
@@ -280,13 +284,41 @@ fn App() -> Element {
         });
     });
 
-    // Fetch price history on mount and every 30 seconds
+    // Fetch ETH price on mount and every 5 seconds
     use_effect(move || {
         spawn(async move {
             loop {
-                if let Ok(resp) = reqwest::get(format!("{}/price/history", API_BASE)).await {
+                if let Ok(resp) = reqwest::get(format!("{}/price?asset=ETH", API_BASE)).await {
+                    if let Ok(data) = resp.json::<PriceResponse>().await {
+                        eth_price.set(data.price);
+                    }
+                }
+                gloo_timers::future::TimeoutFuture::new(5_000).await;
+            }
+        });
+    });
+
+    // Fetch BTC price history on mount and every 30 seconds
+    use_effect(move || {
+        spawn(async move {
+            loop {
+                if let Ok(resp) = reqwest::get(format!("{}/price/history?asset=BTC", API_BASE)).await {
                     if let Ok(data) = resp.json::<PriceHistoryResponse>().await {
-                        price_history.set(data.prices);
+                        btc_history.set(data.prices);
+                    }
+                }
+                gloo_timers::future::TimeoutFuture::new(30_000).await;
+            }
+        });
+    });
+
+    // Fetch ETH price history on mount and every 30 seconds
+    use_effect(move || {
+        spawn(async move {
+            loop {
+                if let Ok(resp) = reqwest::get(format!("{}/price/history?asset=ETH", API_BASE)).await {
+                    if let Ok(data) = resp.json::<PriceHistoryResponse>().await {
+                        eth_history.set(data.prices);
                     }
                 }
                 gloo_timers::future::TimeoutFuture::new(30_000).await;
@@ -427,14 +459,15 @@ fn App() -> Element {
         }
     });
 
-    let execute_trade = move |side: &str| {
+    let execute_trade = move |side: &str, asset: &str| {
         let side = side.to_string();
+        let asset = asset.to_string();
         let qty = quantity().parse::<f64>().unwrap_or(0.0);
         let uid = user_id();
 
         spawn(async move {
             let trade = TradeRequest {
-                asset: "BTC".to_string(),
+                asset: asset.clone(),
                 side: side.clone(),
                 quantity: qty,
             };
@@ -617,12 +650,12 @@ fn App() -> Element {
 
                         div { style: "display: flex; gap: 10px; margin-top: 10px;",
                             button {
-                                onclick: move |_| execute_trade("Buy"),
+                                onclick: move |_| execute_trade("Buy", "BTC"),
                                 style: "flex: 1; padding: 12px; background: #4caf50; color: white; border: none; border-radius: 4px; cursor: pointer;",
                                 "Buy BTC"
                             }
                             button {
-                                onclick: move |_| execute_trade("Sell"),
+                                onclick: move |_| execute_trade("Sell", "BTC"),
                                 style: "flex: 1; padding: 12px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer;",
                                 "Sell BTC"
                             }
@@ -663,17 +696,17 @@ fn App() -> Element {
                             style: "background: white; padding: 20px; border-radius: 8px; border: 2px solid #ddd; cursor: pointer; transition: all 0.2s; hover: border-color: #2196F3;",
                             div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;",
                                 h3 { style: "margin: 0; font-size: 24px;", "BTC/USD" }
-                                p { style: "margin: 0; font-size: 28px; font-weight: bold; color: #2196F3;", "${price:.2}" }
+                                p { style: "margin: 0; font-size: 28px; font-weight: bold; color: #2196F3;", "${btc_price():.2}" }
                             }
                             p { style: "color: #666; font-size: 14px; margin-bottom: 15px;", "Bitcoin" }
-                            if !price_history().is_empty() {
+                            if !btc_history().is_empty() {
                                 div { style: "height: 120px; background: #f5f5f5; border-radius: 4px; display: flex; align-items: center; justify-content: center;",
                                     svg {
                                         width: "100%",
                                         height: "100",
                                         view_box: "0 0 300 100",
                                         {
-                                            let prices = price_history();
+                                            let prices = btc_history();
                                             let min = prices.iter().map(|p| p.price).fold(f64::INFINITY, f64::min);
                                             let max = prices.iter().map(|p| p.price).fold(f64::NEG_INFINITY, f64::max);
                                             let range = if (max - min).abs() < 0.01 { 1.0 } else { max - min };
@@ -707,17 +740,53 @@ fn App() -> Element {
                             }
                         }
 
-                        // ETH/USD Market (placeholder with simulated price)
+                        // ETH/USD Market
                         div {
                             onclick: move |_| current_view.set(AppView::Trading("ETH".to_string())),
                             style: "background: white; padding: 20px; border-radius: 8px; border: 2px solid #ddd; cursor: pointer; transition: all 0.2s;",
                             div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;",
                                 h3 { style: "margin: 0; font-size: 24px;", "ETH/USD" }
-                                p { style: "margin: 0; font-size: 28px; font-weight: bold; color: #9c27b0;", "$--" }
+                                p { style: "margin: 0; font-size: 28px; font-weight: bold; color: #9c27b0;", "${eth_price():.2}" }
                             }
                             p { style: "color: #666; font-size: 14px; margin-bottom: 15px;", "Ethereum" }
-                            div { style: "height: 120px; background: #f5f5f5; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #999;",
-                                "Coming soon"
+                            if !eth_history().is_empty() {
+                                div { style: "height: 120px; background: #f5f5f5; border-radius: 4px; display: flex; align-items: center; justify-content: center;",
+                                    svg {
+                                        width: "100%",
+                                        height: "100",
+                                        view_box: "0 0 300 100",
+                                        {
+                                            let prices = eth_history();
+                                            let min = prices.iter().map(|p| p.price).fold(f64::INFINITY, f64::min);
+                                            let max = prices.iter().map(|p| p.price).fold(f64::NEG_INFINITY, f64::max);
+                                            let range = if (max - min).abs() < 0.01 { 1.0 } else { max - min };
+
+                                            let mut path = String::from("M ");
+                                            for (i, point) in prices.iter().enumerate() {
+                                                let x = (i as f64 / (prices.len() - 1) as f64) * 300.0;
+                                                let y = 100.0 - ((point.price - min) / range) * 100.0;
+                                                if i == 0 {
+                                                    path.push_str(&format!("{} {} ", x, y));
+                                                } else {
+                                                    path.push_str(&format!("L {} {} ", x, y));
+                                                }
+                                            }
+
+                                            rsx! {
+                                                path {
+                                                    d: "{path}",
+                                                    fill: "none",
+                                                    stroke: "#9c27b0",
+                                                    stroke_width: "2"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                div { style: "height: 120px; background: #f5f5f5; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #999;",
+                                    "Loading chart..."
+                                }
                             }
                         }
 
@@ -737,86 +806,99 @@ fn App() -> Element {
                     }
                 },
                 AppView::Trading(asset) => rsx! {
-                    div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;",
-                        div {
-                            h1 { style: "margin: 0;", "🚀 Trading Simulator - {asset}/USD" }
-                            p { style: "color: #666; margin: 5px 0 0 0;", "Logged in as: {username}" }
-                        }
-                        div { style: "display: flex; gap: 10px;",
-                            button {
-                                onclick: move |_| current_view.set(AppView::Dashboard),
-                                style: "padding: 10px 20px; background: #4caf50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;",
-                                "Dashboard"
+                    {
+                        let current_price = if asset == "BTC" { btc_price() } else { eth_price() };
+                        let current_history = if asset == "BTC" { btc_history() } else { eth_history() };
+
+                        rsx! {
+                            div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;",
+                                div {
+                                    h1 { style: "margin: 0;", "🚀 Trading Simulator - {asset}/USD" }
+                                    p { style: "color: #666; margin: 5px 0 0 0;", "Logged in as: {username}" }
+                                }
+                                div { style: "display: flex; gap: 10px;",
+                                    button {
+                                        onclick: move |_| current_view.set(AppView::Dashboard),
+                                        style: "padding: 10px 20px; background: #4caf50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;",
+                                        "Dashboard"
+                                    }
+                                    button {
+                                        onclick: move |_| current_view.set(AppView::Markets),
+                                        style: "padding: 10px 20px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;",
+                                        "Markets"
+                                    }
+                                    button {
+                                        onclick: move |_| handle_logout(),
+                                        style: "padding: 10px 20px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;",
+                                        "Logout"
+                                    }
+                                }
                             }
-                            button {
-                                onclick: move |_| current_view.set(AppView::Markets),
-                                style: "padding: 10px 20px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;",
-                                "Markets"
+
+                            div { class: "price-display",
+                                style: "background: #f0f0f0; padding: 20px; border-radius: 8px; margin: 20px 0;",
+                                h2 { "{asset} Price" }
+                                p { style: "font-size: 32px; font-weight: bold;",
+                                    "${current_price:.2}"
+                                }
                             }
-                            button {
-                                onclick: move |_| handle_logout(),
-                                style: "padding: 10px 20px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;",
-                                "Logout"
+
+                            // Price Chart
+                            div { class: "price-chart",
+                                style: "background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #ddd;",
+                                h2 { "Price History (Last Hour)" }
+                                if !current_history.is_empty() {
+                                    PriceChart { prices: current_history }
+                                } else {
+                                    p { style: "color: #666;", "Loading price data..." }
+                                }
                             }
-                        }
-                    }
 
-                    div { class: "price-display",
-                        style: "background: #f0f0f0; padding: 20px; border-radius: 8px; margin: 20px 0;",
-                        h2 { "{asset} Price" }
-                        p { style: "font-size: 32px; font-weight: bold;",
-                            "${price:.2}"
-                        }
-                    }
-
-                    // Price Chart
-                    div { class: "price-chart",
-                        style: "background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #ddd;",
-                        h2 { "Price History (Last Hour)" }
-                        if !price_history().is_empty() {
-                            PriceChart { prices: price_history() }
-                        } else {
-                            p { style: "color: #666;", "Loading price data..." }
-                        }
-                    }
-
-                    if let Some(p) = portfolio() {
-                        div { class: "portfolio",
-                            style: "background: #e8f5e9; padding: 20px; border-radius: 8px; margin: 20px 0;",
-                            h2 { "Portfolio" }
-                            p { "Cash: ${p.cash_balance:.2}" }
-                            p { "{asset}: {p.asset_balances.get(&asset).unwrap_or(&0.0):.8}" }
-                        }
-                    }
-
-                    div { class: "trade-form",
-                        style: "background: #fff3e0; padding: 20px; border-radius: 8px;",
-                        h2 { "Trade {asset}" }
-
-                        label { "Quantity ({asset}):" }
-                        input {
-                            r#type: "number",
-                            step: "0.001",
-                            value: "{quantity}",
-                            oninput: move |e| quantity.set(e.value()),
-                            style: "margin: 10px 0; padding: 8px; width: 100%;",
-                        }
-
-                        div { style: "display: flex; gap: 10px; margin-top: 10px;",
-                            button {
-                                onclick: move |_| execute_trade("Buy"),
-                                style: "flex: 1; padding: 12px; background: #4caf50; color: white; border: none; border-radius: 4px; cursor: pointer;",
-                                "Buy {asset}"
+                            if let Some(p) = portfolio() {
+                                div { class: "portfolio",
+                                    style: "background: #e8f5e9; padding: 20px; border-radius: 8px; margin: 20px 0;",
+                                    h2 { "Portfolio" }
+                                    p { "Cash: ${p.cash_balance:.2}" }
+                                    p { "{asset}: {p.asset_balances.get(&asset).unwrap_or(&0.0):.8}" }
+                                }
                             }
-                            button {
-                                onclick: move |_| execute_trade("Sell"),
-                                style: "flex: 1; padding: 12px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer;",
-                                "Sell {asset}"
-                            }
-                        }
 
-                        if !status().is_empty() {
-                            p { style: "margin-top: 10px; color: #666;", "{status}" }
+                            div { class: "trade-form",
+                                style: "background: #fff3e0; padding: 20px; border-radius: 8px;",
+                                h2 { "Trade {asset}" }
+
+                                label { "Quantity ({asset}):" }
+                                input {
+                                    r#type: "number",
+                                    step: "0.001",
+                                    value: "{quantity}",
+                                    oninput: move |e| quantity.set(e.value()),
+                                    style: "margin: 10px 0; padding: 8px; width: 100%;",
+                                }
+
+                                div { style: "display: flex; gap: 10px; margin-top: 10px;",
+                                    button {
+                                        onclick: {
+                                            let asset = asset.clone();
+                                            move |_| execute_trade("Buy", &asset)
+                                        },
+                                        style: "flex: 1; padding: 12px; background: #4caf50; color: white; border: none; border-radius: 4px; cursor: pointer;",
+                                        "Buy {asset}"
+                                    }
+                                    button {
+                                        onclick: {
+                                            let asset = asset.clone();
+                                            move |_| execute_trade("Sell", &asset)
+                                        },
+                                        style: "flex: 1; padding: 12px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer;",
+                                        "Sell {asset}"
+                                    }
+                                }
+
+                                if !status().is_empty() {
+                                    p { style: "margin-top: 10px; color: #666;", "{status}" }
+                                }
+                            }
                         }
                     }
                 }
