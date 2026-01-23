@@ -825,8 +825,66 @@ fn App() -> Element {
                                 }
                             }
                             p { style: "color: #666; font-size: 14px; margin-bottom: 15px;", "Bitcoin per Ethereum" }
-                            div { style: "height: 120px; background: #f5f5f5; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #666; font-size: 14px;",
-                                "Cross-pair trading enabled"
+                            {
+                                // Calculate BTC/ETH historical data
+                                let btc_hist = btc_history();
+                                let eth_hist = eth_history();
+                                let mut cross_history = Vec::new();
+
+                                for btc_point in btc_hist.iter() {
+                                    if let Some(eth_point) = eth_hist.iter().find(|e| e.timestamp == btc_point.timestamp) {
+                                        if eth_point.price > 0.0 {
+                                            cross_history.push(PricePoint {
+                                                timestamp: btc_point.timestamp,
+                                                price: btc_point.price / eth_point.price,
+                                            });
+                                        }
+                                    }
+                                }
+
+                                if !cross_history.is_empty() {
+                                    rsx! {
+                                        div { style: "height: 120px; background: #f5f5f5; border-radius: 4px; display: flex; align-items: center; justify-content: center;",
+                                            svg {
+                                                width: "100%",
+                                                height: "100",
+                                                view_box: "0 0 300 100",
+                                                {
+                                                    let prices = &cross_history;
+                                                    let min = prices.iter().map(|p| p.price).fold(f64::INFINITY, f64::min);
+                                                    let max = prices.iter().map(|p| p.price).fold(f64::NEG_INFINITY, f64::max);
+                                                    let range = if (max - min).abs() < 0.01 { 1.0 } else { max - min };
+
+                                                    let mut path = String::from("M ");
+                                                    for (i, point) in prices.iter().enumerate() {
+                                                        let x = (i as f64 / (prices.len() - 1) as f64) * 300.0;
+                                                        let y = 100.0 - ((point.price - min) / range) * 100.0;
+                                                        if i == 0 {
+                                                            path.push_str(&format!("{} {} ", x, y));
+                                                        } else {
+                                                            path.push_str(&format!("L {} {} ", x, y));
+                                                        }
+                                                    }
+
+                                                    rsx! {
+                                                        path {
+                                                            d: "{path}",
+                                                            fill: "none",
+                                                            stroke: "#ff9800",
+                                                            stroke_width: "2"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    rsx! {
+                                        div { style: "height: 120px; background: #f5f5f5; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #999;",
+                                            "Loading chart..."
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -838,7 +896,25 @@ fn App() -> Element {
                             let btc = btc_price();
                             let eth = eth_price();
                             let cross_price = if btc > 0.0 && eth > 0.0 { btc / eth } else { 0.0 };
-                            ("BTC", "ETH", cross_price, btc_history())
+
+                            // Calculate BTC/ETH historical data from BTC-USD and ETH-USD
+                            let btc_hist = btc_history();
+                            let eth_hist = eth_history();
+                            let mut cross_history = Vec::new();
+
+                            // Match timestamps and calculate cross-pair price
+                            for btc_point in btc_hist.iter() {
+                                if let Some(eth_point) = eth_hist.iter().find(|e| e.timestamp == btc_point.timestamp) {
+                                    if eth_point.price > 0.0 {
+                                        cross_history.push(PricePoint {
+                                            timestamp: btc_point.timestamp,
+                                            price: btc_point.price / eth_point.price,
+                                        });
+                                    }
+                                }
+                            }
+
+                            ("BTC", "ETH", cross_price, cross_history)
                         } else if asset == "BTC" {
                             ("BTC", "USD", btc_price(), btc_history())
                         } else {
