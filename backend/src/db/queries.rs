@@ -22,14 +22,19 @@ pub async fn get_user(pool: &SqlitePool, user_id: &UserId) -> Result<Option<User
             let asset_balances_str: String = r.get("asset_balances");
             let trade_history_str: String = r.get("trade_history");
 
-            let asset_balances: HashMap<String, f64> = serde_json::from_str(&asset_balances_str)
+            let mut asset_balances: HashMap<String, f64> = serde_json::from_str(&asset_balances_str)
                 .unwrap_or_default();
             let trade_history = serde_json::from_str(&trade_history_str)
                 .unwrap_or_default();
 
+            // Migration: Move cash_balance to USD asset if not already there
+            if !asset_balances.contains_key("USD") && cash_balance > 0.0 {
+                asset_balances.insert("USD".to_string(), cash_balance);
+            }
+
             Ok(Some(UserData {
                 username,
-                cash_balance,
+                cash_balance,  // Keep for backward compat
                 asset_balances,
                 trade_history,
             }))
@@ -84,16 +89,21 @@ pub async fn load_all_users(pool: &SqlitePool) -> Result<HashMap<UserId, UserDat
         let asset_balances_str: String = row.get("asset_balances");
         let trade_history_str: String = row.get("trade_history");
 
-        let asset_balances: HashMap<String, f64> = serde_json::from_str(&asset_balances_str)
+        let mut asset_balances: HashMap<String, f64> = serde_json::from_str(&asset_balances_str)
             .unwrap_or_default();
         let trade_history = serde_json::from_str(&trade_history_str)
             .unwrap_or_default();
+
+        // Migration: Move cash_balance to USD asset if not already there
+        if !asset_balances.contains_key("USD") && cash_balance > 0.0 {
+            asset_balances.insert("USD".to_string(), cash_balance);
+        }
 
         users.insert(
             user_id,
             UserData {
                 username,
-                cash_balance,
+                cash_balance,  // Keep for backward compat
                 asset_balances,
                 trade_history,
             },

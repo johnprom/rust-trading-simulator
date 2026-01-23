@@ -67,6 +67,24 @@ impl AppState {
             .map(|p| p.price)
     }
 
+    /// Get price for a trading pair (base/quote)
+    /// For USD pairs: returns direct price (e.g., BTC-USD)
+    /// For cross pairs: calculates via USD (e.g., BTC-ETH = BTC-USD / ETH-USD)
+    pub async fn get_pair_price(&self, base: &str, quote: &str) -> Option<f64> {
+        if quote == "USD" {
+            // Direct USD price
+            self.get_latest_price(base).await
+        } else if base == "USD" {
+            // Inverted (e.g., USD/BTC = 1 / BTC-USD)
+            self.get_latest_price(quote).await.map(|p| 1.0 / p)
+        } else {
+            // Cross-pair calculation: BTC/ETH = BTC-USD / ETH-USD
+            let base_usd = self.get_latest_price(base).await?;
+            let quote_usd = self.get_latest_price(quote).await?;
+            Some(base_usd / quote_usd)
+        }
+    }
+
     pub async fn get_price_window(&self, asset: &str, limit: usize) -> Vec<PricePoint> {
         let state = self.inner.read().await;
         state.price_window

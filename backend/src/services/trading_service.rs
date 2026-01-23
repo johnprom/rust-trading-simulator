@@ -7,12 +7,14 @@ pub enum TradeError {
     InsufficientAssets,
     InvalidQuantity,
     UserNotFound,
+    PriceUnavailable,
 }
 
 pub async fn execute_trade(
     state: &AppState,
     user_id: &UserId,
-    asset: &str,
+    base_asset: &str,
+    quote_asset: &str,
     side: TradeSide,
     quantity: f64,
 ) -> Result<Trade, TradeError> {
@@ -20,25 +22,40 @@ pub async fn execute_trade(
         return Err(TradeError::InvalidQuantity);
     }
 
+    // Get pair price (base in terms of quote)
     let price = state
-        .get_latest_price(asset)
+        .get_pair_price(base_asset, quote_asset)
         .await
-        .ok_or(TradeError::UserNotFound)?;
+        .ok_or(TradeError::PriceUnavailable)?;
 
-    let total_cost = price * quantity;
+    let quote_cost = price * quantity;
+
+    // Capture USD prices at trade time for analytics
+    let base_usd_price = if base_asset == "USD" {
+        Some(1.0)
+    } else {
+        state.get_latest_price(base_asset).await
+    };
+
+    let quote_usd_price = if quote_asset == "USD" {
+        Some(1.0)
+    } else {
+        state.get_latest_price(quote_asset).await
+    };
 
     // Check balances first before attempting the trade
     let user = state.get_user(user_id).await.ok_or(TradeError::UserNotFound)?;
 
     match side {
         TradeSide::Buy => {
-            if user.cash_balance < total_cost {
+            let quote_balance = user.get_balance(quote_asset);
+            if quote_balance < quote_cost {
                 return Err(TradeError::InsufficientFunds);
             }
         }
         TradeSide::Sell => {
-            let balance = user.asset_balances.get(asset).copied().unwrap_or(0.0);
-            if balance < quantity {
+            let base_balance = user.get_balance(base_asset);
+            if base_balance < quantity {
                 return Err(TradeError::InsufficientAssets);
             }
         }
@@ -47,11 +64,14 @@ pub async fn execute_trade(
     // Create trade record
     let trade = Trade {
         user_id: user_id.clone(),
-        asset: asset.to_string(),
+        base_asset: base_asset.to_string(),
+        quote_asset: quote_asset.to_string(),
         side: side.clone(),
         quantity,
         price,
         timestamp: chrono::Utc::now(),
+        base_usd_price,
+        quote_usd_price,
     };
 
     // Execute the trade and record it in history
@@ -59,12 +79,16 @@ pub async fn execute_trade(
         .update_user(user_id, |user| {
             match side {
                 TradeSide::Buy => {
-                    user.cash_balance -= total_cost;
-                    *user.asset_balances.entry(asset.to_string()).or_insert(0.0) += quantity;
+                    // Deduct quote asset
+                    *user.asset_balances.entry(quote_asset.to_string()).or_insert(0.0) -= quote_cost;
+                    // Add base asset
+                    *user.asset_balances.entry(base_asset.to_string()).or_insert(0.0) += quantity;
                 }
                 TradeSide::Sell => {
-                    *user.asset_balances.get_mut(asset).unwrap() -= quantity;
-                    user.cash_balance += total_cost;
+                    // Deduct base asset
+                    *user.asset_balances.entry(base_asset.to_string()).or_insert(0.0) -= quantity;
+                    // Add quote asset
+                    *user.asset_balances.entry(quote_asset.to_string()).or_insert(0.0) += quote_cost;
                 }
             }
             // Add trade to history

@@ -62,11 +62,28 @@ struct UserData {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 struct Trade {
     user_id: String,
-    asset: String,
+    #[serde(alias = "asset")]  // Backward compat
+    base_asset: String,
+    #[serde(default = "default_quote_usd")]
+    quote_asset: String,
     side: TradeSide,
     quantity: f64,
     price: f64,
     timestamp: String,
+    #[serde(default)]
+    base_usd_price: Option<f64>,
+    #[serde(default)]
+    quote_usd_price: Option<f64>,
+}
+
+fn default_quote_usd() -> String {
+    "USD".to_string()
+}
+
+impl Trade {
+    fn asset(&self) -> &str {
+        &self.base_asset
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
@@ -78,6 +95,8 @@ enum TradeSide {
 #[derive(Clone, Debug, Serialize)]
 struct TradeRequest {
     asset: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    quote_asset: Option<String>,
     side: String,
     quantity: f64,
 }
@@ -459,7 +478,7 @@ fn App() -> Element {
         }
     });
 
-    let execute_trade = move |side: &str, asset: &str| {
+    let execute_trade = move |side: &str, asset: &str, quote_asset_opt: Option<String>| {
         let side = side.to_string();
         let asset = asset.to_string();
         let qty = quantity().parse::<f64>().unwrap_or(0.0);
@@ -468,6 +487,7 @@ fn App() -> Element {
         spawn(async move {
             let trade = TradeRequest {
                 asset: asset.clone(),
+                quote_asset: quote_asset_opt,
                 side: side.clone(),
                 quantity: qty,
             };
@@ -626,7 +646,7 @@ fn App() -> Element {
                                         tbody {
                                             for trade in p.trade_history.iter().rev().take(10) {
                                                 tr { style: "border-bottom: 1px solid #eee;",
-                                                    td { style: "padding: 10px;", "{trade.asset}" }
+                                                    td { style: "padding: 10px;", "{trade.asset()}" }
                                                     td {
                                                         style: if matches!(trade.side, TradeSide::Buy) { "padding: 10px; color: #4caf50; font-weight: bold;" } else { "padding: 10px; color: #f44336; font-weight: bold;" },
                                                         "{trade.side:?}"
@@ -778,30 +798,57 @@ fn App() -> Element {
                             }
                         }
 
-                        // BTC/ETH Market (placeholder)
+                        // BTC/ETH Market (cross-pair)
                         div {
-                            onclick: move |_| current_view.set(AppView::Trading("BTCETH".to_string())),
+                            onclick: move |_| current_view.set(AppView::Trading("BTC/ETH".to_string())),
                             style: "background: white; padding: 20px; border-radius: 8px; border: 2px solid #ddd; cursor: pointer; transition: all 0.2s;",
                             div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;",
                                 h3 { style: "margin: 0; font-size: 24px;", "BTC/ETH" }
-                                p { style: "margin: 0; font-size: 28px; font-weight: bold; color: #ff9800;", "--" }
+                                {
+                                    let btc = btc_price();
+                                    let eth = eth_price();
+                                    let cross_price = if btc > 0.0 && eth > 0.0 {
+                                        btc / eth
+                                    } else {
+                                        0.0
+                                    };
+
+                                    rsx! {
+                                        p { style: "margin: 0; font-size: 28px; font-weight: bold; color: #ff9800;",
+                                            if cross_price > 0.0 {
+                                                "{cross_price:.4} ETH"
+                                            } else {
+                                                "--"
+                                            }
+                                        }
+                                    }
+                                }
                             }
-                            p { style: "color: #666; font-size: 14px; margin-bottom: 15px;", "Bitcoin / Ethereum" }
-                            div { style: "height: 120px; background: #f5f5f5; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #999;",
-                                "Coming soon"
+                            p { style: "color: #666; font-size: 14px; margin-bottom: 15px;", "Bitcoin per Ethereum" }
+                            div { style: "height: 120px; background: #f5f5f5; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #666; font-size: 14px;",
+                                "Cross-pair trading enabled"
                             }
                         }
                     }
                 },
                 AppView::Trading(asset) => rsx! {
                     {
-                        let current_price = if asset == "BTC" { btc_price() } else { eth_price() };
-                        let current_history = if asset == "BTC" { btc_history() } else { eth_history() };
+                        let (base_asset, quote_asset, current_price, current_history) = if asset == "BTC/ETH" {
+                            // Cross-pair: BTC priced in ETH
+                            let btc = btc_price();
+                            let eth = eth_price();
+                            let cross_price = if btc > 0.0 && eth > 0.0 { btc / eth } else { 0.0 };
+                            ("BTC", "ETH", cross_price, btc_history())
+                        } else if asset == "BTC" {
+                            ("BTC", "USD", btc_price(), btc_history())
+                        } else {
+                            ("ETH", "USD", eth_price(), eth_history())
+                        };
 
                         rsx! {
                             div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;",
                                 div {
-                                    h1 { style: "margin: 0;", "Trading Simulator - {asset}/USD" }
+                                    h1 { style: "margin: 0;", "🚀 Trading Simulator - {base_asset}/{quote_asset}" }
                                     p { style: "color: #666; margin: 5px 0 0 0;", "Logged in as: {username}" }
                                 }
                                 div { style: "display: flex; gap: 10px;",
@@ -825,16 +872,20 @@ fn App() -> Element {
 
                             div { class: "price-display",
                                 style: "background: #f0f0f0; padding: 20px; border-radius: 8px; margin: 20px 0;",
-                                h2 { "{asset} Price" }
+                                h2 { "{base_asset}/{quote_asset} Price" }
                                 p { style: "font-size: 32px; font-weight: bold;",
-                                    "${current_price:.2}"
+                                    if quote_asset == "USD" {
+                                        "${current_price:.2}"
+                                    } else {
+                                        "{current_price:.4} {quote_asset}"
+                                    }
                                 }
                             }
 
-                            // Price Chart
+                            // Price Chart (shows base asset USD price history)
                             div { class: "price-chart",
                                 style: "background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #ddd;",
-                                h2 { "Price History (Last Hour)" }
+                                h2 { "{base_asset} Price History (Last Hour)" }
                                 if !current_history.is_empty() {
                                     PriceChart { prices: current_history }
                                 } else {
@@ -846,16 +897,16 @@ fn App() -> Element {
                                 div { class: "portfolio",
                                     style: "background: #e8f5e9; padding: 20px; border-radius: 8px; margin: 20px 0;",
                                     h2 { "Portfolio" }
-                                    p { "Cash: ${p.cash_balance:.2}" }
-                                    p { "{asset}: {p.asset_balances.get(&asset).unwrap_or(&0.0):.8}" }
+                                    p { style: "font-size: 16px;", "{base_asset}: {p.asset_balances.get(base_asset).unwrap_or(&0.0):.8}" }
+                                    p { style: "font-size: 16px;", "{quote_asset}: {p.asset_balances.get(quote_asset).unwrap_or(&0.0):.8}" }
                                 }
                             }
 
                             div { class: "trade-form",
                                 style: "background: #fff3e0; padding: 20px; border-radius: 8px;",
-                                h2 { "Trade {asset}" }
+                                h2 { "Trade {base_asset}/{quote_asset}" }
 
-                                label { "Quantity ({asset}):" }
+                                label { "Quantity ({base_asset}):" }
                                 input {
                                     r#type: "number",
                                     step: "0.001",
@@ -867,19 +918,29 @@ fn App() -> Element {
                                 div { style: "display: flex; gap: 10px; margin-top: 10px;",
                                     button {
                                         onclick: {
-                                            let asset = asset.clone();
-                                            move |_| execute_trade("Buy", &asset)
+                                            let base = base_asset.to_string();
+                                            let quote_opt = if quote_asset != "USD" {
+                                                Some(quote_asset.to_string())
+                                            } else {
+                                                None
+                                            };
+                                            move |_| execute_trade("Buy", &base, quote_opt.clone())
                                         },
                                         style: "flex: 1; padding: 12px; background: #4caf50; color: white; border: none; border-radius: 4px; cursor: pointer;",
-                                        "Buy {asset}"
+                                        "Buy {base_asset}"
                                     }
                                     button {
                                         onclick: {
-                                            let asset = asset.clone();
-                                            move |_| execute_trade("Sell", &asset)
+                                            let base = base_asset.to_string();
+                                            let quote_opt = if quote_asset != "USD" {
+                                                Some(quote_asset.to_string())
+                                            } else {
+                                                None
+                                            };
+                                            move |_| execute_trade("Sell", &base, quote_opt.clone())
                                         },
                                         style: "flex: 1; padding: 12px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer;",
-                                        "Sell {asset}"
+                                        "Sell {base_asset}"
                                     }
                                 }
 
@@ -888,19 +949,19 @@ fn App() -> Element {
                                 }
                             }
 
-                            // Trade History filtered by asset
+                            // Trade History filtered by base_asset
                             if let Some(p) = portfolio() {
                                 div { class: "trade-history",
                                     style: "background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #ddd;",
-                                    h2 { "{asset} Trade History" }
+                                    h2 { "{base_asset} Trade History" }
                                     {
                                         let filtered_trades: Vec<_> = p.trade_history.iter()
-                                            .filter(|t| t.asset == asset)
+                                            .filter(|t| t.asset() == base_asset)
                                             .collect();
 
                                         if filtered_trades.is_empty() {
                                             rsx! {
-                                                p { style: "color: #666;", "No {asset} trades yet" }
+                                                p { style: "color: #666;", "No {base_asset} trades yet" }
                                             }
                                         } else {
                                             rsx! {
@@ -937,7 +998,7 @@ fn App() -> Element {
                                                 }
                                                 if filtered_trades.len() > 10 {
                                                     p { style: "margin-top: 10px; color: #666; font-size: 14px;",
-                                                        "Showing last 10 of {filtered_trades.len()} {asset} trades"
+                                                        "Showing last 10 of {filtered_trades.len()} {base_asset} trades"
                                                     }
                                                 }
                                             }

@@ -1,0 +1,11 @@
+-- Migration to update trade model for trading pairs and USD snapshots
+-- Note: SQLite doesn't support ALTER COLUMN, so we handle this in the application layer
+-- The trade_history JSON field will automatically serialize the new Trade structure
+-- Old trades without the new fields will deserialize with None for Option<f64> fields
+
+-- No SQL changes needed - the trade_history field is JSON
+-- Backward compatibility is handled by:
+-- 1. Serde will set base_asset from old 'asset' field
+-- 2. Serde will default quote_asset to "USD" if missing
+-- 3. USD snapshot fields are Option<f64> so None for old trades
+-- 4. UserData now includes USD in asset_balances (initialized on user creation/load)
