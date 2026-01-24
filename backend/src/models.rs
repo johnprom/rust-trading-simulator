@@ -12,6 +12,17 @@ pub struct PricePoint {
     pub price: f64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum TransactionType {
+    Trade,
+    Deposit,
+    Withdrawal,
+}
+
+fn default_transaction_type() -> TransactionType {
+    TransactionType::Trade
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserData {
     pub username: String,
@@ -23,6 +34,10 @@ pub struct UserData {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Trade {
     pub user_id: UserId,
+
+    #[serde(default = "default_transaction_type")]
+    pub transaction_type: TransactionType,
+
     #[serde(alias = "asset")]  // Backward compat: old trades had "asset" field
     pub base_asset: Asset,      // Asset being traded (e.g., BTC in BTC/USD)
     #[serde(default = "default_quote_asset")]  // Default to USD if missing
@@ -91,5 +106,28 @@ impl UserData {
             return self.cash_balance;
         }
         self.asset_balances.get(asset).copied().unwrap_or(0.0)
+    }
+
+    /// Calculate lifetime deposits (excluding initial seed)
+    pub fn lifetime_deposits(&self) -> f64 {
+        self.trade_history
+            .iter()
+            .filter(|t| t.transaction_type == TransactionType::Deposit)
+            .map(|t| t.quantity)
+            .sum()
+    }
+
+    /// Calculate lifetime withdrawals
+    pub fn lifetime_withdrawals(&self) -> f64 {
+        self.trade_history
+            .iter()
+            .filter(|t| t.transaction_type == TransactionType::Withdrawal)
+            .map(|t| t.quantity)
+            .sum()
+    }
+
+    /// Calculate lifetime funding (seed + deposits)
+    pub fn lifetime_funding(&self) -> f64 {
+        10000.0 + self.lifetime_deposits()
     }
 }

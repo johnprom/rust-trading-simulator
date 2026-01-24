@@ -75,6 +75,8 @@ async fn main() {
         .route("/price/history", get(routes::price::get_price_history))
         .route("/portfolio", get(routes::portfolio::get_portfolio))
         .route("/trade", post(routes::trade::post_trade))
+        .route("/deposit", post(routes::trade::post_deposit))
+        .route("/withdrawal", post(routes::trade::post_withdrawal))
         .route("/signup", post(routes::auth::signup))
         .route("/login", post(routes::auth::login));
 

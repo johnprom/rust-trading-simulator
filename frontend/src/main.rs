@@ -51,6 +51,17 @@ struct PriceHistoryResponse {
     prices: Vec<PricePoint>,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+enum TransactionType {
+    Trade,
+    Deposit,
+    Withdrawal,
+}
+
+fn default_transaction_type() -> TransactionType {
+    TransactionType::Trade
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct UserData {
     username: String,
@@ -62,6 +73,8 @@ struct UserData {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 struct Trade {
     user_id: String,
+    #[serde(default = "default_transaction_type")]
+    transaction_type: TransactionType,
     #[serde(alias = "asset")]  // Backward compat
     base_asset: String,
     #[serde(default = "default_quote_usd")]
@@ -99,6 +112,16 @@ struct TradeRequest {
     quote_asset: Option<String>,
     side: String,
     quantity: f64,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct DepositRequest {
+    amount: f64,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct WithdrawalRequest {
+    amount: f64,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -283,6 +306,8 @@ fn App() -> Element {
     let mut portfolio = use_signal(|| None::<UserData>);
     let mut quantity = use_signal(|| String::from("0.01"));
     let mut status = use_signal(|| String::from(""));
+    let mut deposit_amount = use_signal(|| String::from("100"));
+    let mut withdrawal_amount = use_signal(|| String::from("100"));
 
     // Auth form state
     let mut auth_username = use_signal(|| String::new());
@@ -524,6 +549,76 @@ fn App() -> Element {
         });
     };
 
+    let execute_deposit = move || {
+        let amount = deposit_amount().parse::<f64>().unwrap_or(0.0);
+        let uid = user_id();
+
+        spawn(async move {
+            let request = DepositRequest { amount };
+            let client = reqwest::Client::new();
+            match client
+                .post(format!("{}/deposit?user_id={}", API_BASE, uid.clone()))
+                .json(&request)
+                .send()
+                .await
+            {
+                Ok(response) => {
+                    if response.status().is_success() {
+                        status.set(format!("Deposit of ${:.2} successful!", amount));
+                        // Refetch portfolio
+                        if let Ok(resp) = reqwest::get(format!("{}/portfolio?user_id={}", API_BASE, uid)).await {
+                            if let Ok(data) = resp.json::<UserData>().await {
+                                portfolio.set(Some(data));
+                            }
+                        }
+                    } else {
+                        if let Ok(error_resp) = response.json::<TradeErrorResponse>().await {
+                            status.set(error_resp.error);
+                        } else {
+                            status.set("Deposit failed".to_string());
+                        }
+                    }
+                }
+                Err(e) => status.set(format!("Error: {}", e)),
+            }
+        });
+    };
+
+    let execute_withdrawal = move || {
+        let amount = withdrawal_amount().parse::<f64>().unwrap_or(0.0);
+        let uid = user_id();
+
+        spawn(async move {
+            let request = WithdrawalRequest { amount };
+            let client = reqwest::Client::new();
+            match client
+                .post(format!("{}/withdrawal?user_id={}", API_BASE, uid.clone()))
+                .json(&request)
+                .send()
+                .await
+            {
+                Ok(response) => {
+                    if response.status().is_success() {
+                        status.set(format!("Withdrawal of ${:.2} successful!", amount));
+                        // Refetch portfolio
+                        if let Ok(resp) = reqwest::get(format!("{}/portfolio?user_id={}", API_BASE, uid)).await {
+                            if let Ok(data) = resp.json::<UserData>().await {
+                                portfolio.set(Some(data));
+                            }
+                        }
+                    } else {
+                        if let Ok(error_resp) = response.json::<TradeErrorResponse>().await {
+                            status.set(error_resp.error);
+                        } else {
+                            status.set("Withdrawal failed".to_string());
+                        }
+                    }
+                }
+                Err(e) => status.set(format!("Error: {}", e)),
+            }
+        });
+    };
+
     rsx! {
         div { class: "container",
             style: "max-width: 1200px; margin: 0 auto; padding: 20px; font-family: sans-serif;",
@@ -612,31 +707,114 @@ fn App() -> Element {
                         div { class: "portfolio",
                             style: "background: #e8f5e9; padding: 20px; border-radius: 8px; margin: 20px 0;",
                             h2 { "Portfolio" }
-                            p { style: "font-size: 18px; font-weight: bold; margin-bottom: 10px;", "Cash: ${p.cash_balance:.2}" }
+                            {
+                                let usd_balance = p.asset_balances.get("USD").copied().unwrap_or(0.0);
+                                rsx! {
+                                    p { style: "font-size: 18px; font-weight: bold; margin-bottom: 10px;", "Cash: ${usd_balance:.2}" }
+                                }
+                            }
 
                             if !p.asset_balances.is_empty() {
                                 h3 { style: "margin-top: 20px; margin-bottom: 10px;", "Assets" }
                                 for (asset, balance) in p.asset_balances.iter() {
-                                    if *balance > 0.0 {
+                                    if asset != "USD" && *balance > 0.0 {
                                         p { style: "font-size: 16px; margin: 5px 0;", "{asset}: {balance:.8}" }
                                     }
                                 }
                             }
                         }
 
-                        // Trade History
+                        // Deposit/Withdrawal Controls
+                        div { class: "funding",
+                            style: "background: #fff3e0; padding: 20px; border-radius: 8px; margin: 20px 0;",
+                            h2 { "Account Funding" }
+
+                            div { style: "display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 15px;",
+                                // Deposit section
+                                div { style: "background: white; padding: 15px; border-radius: 4px; border: 1px solid #ddd;",
+                                    h3 { style: "margin-top: 0; color: #4caf50;", "Deposit" }
+                                    p { style: "font-size: 12px; color: #666; margin: 5px 0;", "Min: $10 | Max: $100,000" }
+                                    input {
+                                        r#type: "number",
+                                        value: "{deposit_amount}",
+                                        oninput: move |e| deposit_amount.set(e.value().clone()),
+                                        style: "width: 100%; padding: 10px; margin: 10px 0; font-size: 16px; border: 1px solid #ddd; border-radius: 4px;",
+                                        placeholder: "Amount"
+                                    }
+                                    button {
+                                        onclick: move |_| execute_deposit(),
+                                        style: "width: 100%; padding: 12px; background: #4caf50; color: white; border: none; border-radius: 4px; font-size: 16px; font-weight: bold; cursor: pointer;",
+                                        "Deposit Funds"
+                                    }
+                                }
+
+                                // Withdrawal section
+                                div { style: "background: white; padding: 15px; border-radius: 4px; border: 1px solid #ddd;",
+                                    h3 { style: "margin-top: 0; color: #f44336;", "Withdraw" }
+                                    p { style: "font-size: 12px; color: #666; margin: 5px 0;", "Available: ${p.cash_balance:.2}" }
+                                    input {
+                                        r#type: "number",
+                                        value: "{withdrawal_amount}",
+                                        oninput: move |e| withdrawal_amount.set(e.value().clone()),
+                                        style: "width: 100%; padding: 10px; margin: 10px 0; font-size: 16px; border: 1px solid #ddd; border-radius: 4px;",
+                                        placeholder: "Amount"
+                                    }
+                                    button {
+                                        onclick: move |_| execute_withdrawal(),
+                                        style: "width: 100%; padding: 12px; background: #f44336; color: white; border: none; border-radius: 4px; font-size: 16px; font-weight: bold; cursor: pointer;",
+                                        "Withdraw Funds"
+                                    }
+                                }
+                            }
+
+                            // Lifetime stats
+                            {
+                                let lifetime_deposits: f64 = p.trade_history.iter()
+                                    .filter(|t| t.transaction_type == TransactionType::Deposit)
+                                    .map(|t| t.quantity)
+                                    .sum();
+                                let lifetime_withdrawals: f64 = p.trade_history.iter()
+                                    .filter(|t| t.transaction_type == TransactionType::Withdrawal)
+                                    .map(|t| t.quantity)
+                                    .sum();
+                                let lifetime_funding = 10000.0 + lifetime_deposits;
+
+                                rsx! {
+                                    div { style: "margin-top: 20px; padding: 15px; background: white; border-radius: 4px; border: 1px solid #ddd;",
+                                        h3 { style: "margin-top: 0;", "Lifetime Statistics" }
+                                        div { style: "display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; text-align: center;",
+                                            div {
+                                                p { style: "margin: 0; font-size: 12px; color: #666;", "Total Funding" }
+                                                p { style: "margin: 5px 0 0 0; font-size: 20px; font-weight: bold; color: #4caf50;", "${lifetime_funding:.2}" }
+                                            }
+                                            div {
+                                                p { style: "margin: 0; font-size: 12px; color: #666;", "Total Deposits" }
+                                                p { style: "margin: 5px 0 0 0; font-size: 20px; font-weight: bold;", "${lifetime_deposits:.2}" }
+                                            }
+                                            div {
+                                                p { style: "margin: 0; font-size: 12px; color: #666;", "Total Withdrawals" }
+                                                p { style: "margin: 5px 0 0 0; font-size: 20px; font-weight: bold; color: #f44336;", "${lifetime_withdrawals:.2}" }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Transaction History
                         div { class: "trade-history",
                             style: "background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #ddd;",
-                            h2 { "Trade History" }
+                            h2 { "Transaction History" }
                             if p.trade_history.is_empty() {
-                                p { style: "color: #666;", "No trades yet" }
+                                p { style: "color: #666;", "No transactions yet" }
                             } else {
                                 div { style: "overflow-x: auto;",
                                     table { style: "width: 100%; border-collapse: collapse;",
                                         thead {
                                             tr { style: "border-bottom: 2px solid #ddd;",
+                                                th { style: "padding: 10px; text-align: left;", "Type" }
                                                 th { style: "padding: 10px; text-align: left;", "Asset" }
-                                                th { style: "padding: 10px; text-align: left;", "Side" }
+                                                th { style: "padding: 10px; text-align: left;", "Action" }
                                                 th { style: "padding: 10px; text-align: right;", "Quantity" }
                                                 th { style: "padding: 10px; text-align: right;", "Price" }
                                                 th { style: "padding: 10px; text-align: right;", "Total" }
@@ -646,10 +824,37 @@ fn App() -> Element {
                                         tbody {
                                             for trade in p.trade_history.iter().rev().take(10) {
                                                 tr { style: "border-bottom: 1px solid #eee;",
-                                                    td { style: "padding: 10px;", "{trade.asset()}" }
+                                                    // Transaction Type
+                                                    td {
+                                                        style: "padding: 10px;",
+                                                        {
+                                                            match trade.transaction_type {
+                                                                TransactionType::Deposit => "💰 Deposit",
+                                                                TransactionType::Withdrawal => "💸 Withdraw",
+                                                                TransactionType::Trade => "📈 Trade",
+                                                            }
+                                                        }
+                                                    }
+                                                    // Asset
+                                                    td {
+                                                        style: "padding: 10px;",
+                                                        {
+                                                            match trade.transaction_type {
+                                                                TransactionType::Trade => format!("{}/{}", trade.base_asset, trade.quote_asset),
+                                                                _ => trade.asset().to_string(),
+                                                            }
+                                                        }
+                                                    }
+                                                    // Action
                                                     td {
                                                         style: if matches!(trade.side, TradeSide::Buy) { "padding: 10px; color: #4caf50; font-weight: bold;" } else { "padding: 10px; color: #f44336; font-weight: bold;" },
-                                                        "{trade.side:?}"
+                                                        {
+                                                            match trade.transaction_type {
+                                                                TransactionType::Deposit => "+".to_string(),
+                                                                TransactionType::Withdrawal => "-".to_string(),
+                                                                TransactionType::Trade => format!("{:?}", trade.side),
+                                                            }
+                                                        }
                                                     }
                                                     td { style: "padding: 10px; text-align: right;", "{trade.quantity:.8}" }
                                                     td { style: "padding: 10px; text-align: right;", "${trade.price:.2}" }
@@ -662,7 +867,7 @@ fn App() -> Element {
                                 }
                                 if p.trade_history.len() > 10 {
                                     p { style: "margin-top: 10px; color: #666; font-size: 14px;",
-                                        "Showing last 10 of {p.trade_history.len()} trades"
+                                        "Showing last 10 of {p.trade_history.len()} transactions"
                                     }
                                 }
                             }

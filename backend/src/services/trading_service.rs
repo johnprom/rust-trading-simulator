@@ -8,6 +8,9 @@ pub enum TradeError {
     InvalidQuantity,
     UserNotFound,
     PriceUnavailable,
+    DepositTooSmall,
+    DepositTooLarge,
+    WithdrawalExceedsBalance,
 }
 
 pub async fn execute_trade(
@@ -64,6 +67,7 @@ pub async fn execute_trade(
     // Create trade record
     let trade = Trade {
         user_id: user_id.clone(),
+        transaction_type: TransactionType::Trade,
         base_asset: base_asset.to_string(),
         quote_asset: quote_asset.to_string(),
         side: side.clone(),
@@ -98,4 +102,85 @@ pub async fn execute_trade(
         .map_err(|_| TradeError::UserNotFound)?;
 
     Ok(trade)
+}
+
+pub async fn deposit(
+    state: &AppState,
+    user_id: &UserId,
+    amount: f64,
+) -> Result<Trade, TradeError> {
+    // Validate deposit amount
+    if amount < 10.0 {
+        return Err(TradeError::DepositTooSmall);
+    }
+    if amount > 100000.0 {
+        return Err(TradeError::DepositTooLarge);
+    }
+
+    let transaction = Trade {
+        user_id: user_id.clone(),
+        transaction_type: TransactionType::Deposit,
+        base_asset: "USD".to_string(),
+        quote_asset: "USD".to_string(),
+        side: TradeSide::Buy,  // Semantically "buying" USD
+        quantity: amount,
+        price: 1.0,
+        timestamp: chrono::Utc::now(),
+        base_usd_price: Some(1.0),
+        quote_usd_price: Some(1.0),
+    };
+
+    // Add USD to balance and record transaction
+    state
+        .update_user(user_id, |user| {
+            *user.asset_balances.entry("USD".to_string()).or_insert(0.0) += amount;
+            user.trade_history.push(transaction.clone());
+        })
+        .await
+        .map_err(|_| TradeError::UserNotFound)?;
+
+    Ok(transaction)
+}
+
+pub async fn withdraw(
+    state: &AppState,
+    user_id: &UserId,
+    amount: f64,
+) -> Result<Trade, TradeError> {
+    // Validate withdrawal amount
+    if amount <= 0.0 {
+        return Err(TradeError::InvalidQuantity);
+    }
+
+    // Check sufficient balance
+    let user = state.get_user(user_id).await.ok_or(TradeError::UserNotFound)?;
+    let usd_balance = user.get_balance("USD");
+
+    if amount > usd_balance {
+        return Err(TradeError::WithdrawalExceedsBalance);
+    }
+
+    let transaction = Trade {
+        user_id: user_id.clone(),
+        transaction_type: TransactionType::Withdrawal,
+        base_asset: "USD".to_string(),
+        quote_asset: "USD".to_string(),
+        side: TradeSide::Sell,  // Semantically "selling" USD
+        quantity: amount,
+        price: 1.0,
+        timestamp: chrono::Utc::now(),
+        base_usd_price: Some(1.0),
+        quote_usd_price: Some(1.0),
+    };
+
+    // Deduct USD from balance and record transaction
+    state
+        .update_user(user_id, |user| {
+            *user.asset_balances.entry("USD".to_string()).or_insert(0.0) -= amount;
+            user.trade_history.push(transaction.clone());
+        })
+        .await
+        .map_err(|_| TradeError::UserNotFound)?;
+
+    Ok(transaction)
 }

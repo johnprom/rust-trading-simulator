@@ -12,6 +12,16 @@ pub struct TradeRequest {
 }
 
 #[derive(Deserialize)]
+pub struct DepositRequest {
+    pub amount: f64,
+}
+
+#[derive(Deserialize)]
+pub struct WithdrawalRequest {
+    pub amount: f64,
+}
+
+#[derive(Deserialize)]
 pub struct TradeQuery {
     pub user_id: String,
 }
@@ -47,6 +57,53 @@ pub async fn post_trade(
                 TradeError::InvalidQuantity => "Invalid quantity specified".to_string(),
                 TradeError::UserNotFound => "User not found".to_string(),
                 TradeError::PriceUnavailable => "Price unavailable for this trading pair".to_string(),
+                TradeError::DepositTooSmall => "Deposit must be at least $10".to_string(),
+                TradeError::DepositTooLarge => "Deposit cannot exceed $100,000".to_string(),
+                TradeError::WithdrawalExceedsBalance => "Insufficient balance for withdrawal".to_string(),
+            };
+            Err((
+                StatusCode::BAD_REQUEST,
+                Json(TradeErrorResponse { error: error_msg }),
+            ))
+        }
+    }
+}
+
+pub async fn post_deposit(
+    State(state): State<AppState>,
+    Query(query): Query<TradeQuery>,
+    Json(req): Json<DepositRequest>,
+) -> Result<Json<Trade>, (StatusCode, Json<TradeErrorResponse>)> {
+    match trading_service::deposit(&state, &query.user_id, req.amount).await {
+        Ok(transaction) => Ok(Json(transaction)),
+        Err(err) => {
+            let error_msg = match err {
+                TradeError::DepositTooSmall => "Deposit must be at least $10".to_string(),
+                TradeError::DepositTooLarge => "Deposit cannot exceed $100,000".to_string(),
+                TradeError::UserNotFound => "User not found".to_string(),
+                _ => "Deposit failed".to_string(),
+            };
+            Err((
+                StatusCode::BAD_REQUEST,
+                Json(TradeErrorResponse { error: error_msg }),
+            ))
+        }
+    }
+}
+
+pub async fn post_withdrawal(
+    State(state): State<AppState>,
+    Query(query): Query<TradeQuery>,
+    Json(req): Json<WithdrawalRequest>,
+) -> Result<Json<Trade>, (StatusCode, Json<TradeErrorResponse>)> {
+    match trading_service::withdraw(&state, &query.user_id, req.amount).await {
+        Ok(transaction) => Ok(Json(transaction)),
+        Err(err) => {
+            let error_msg = match err {
+                TradeError::WithdrawalExceedsBalance => "Insufficient balance for withdrawal".to_string(),
+                TradeError::InvalidQuantity => "Invalid withdrawal amount".to_string(),
+                TradeError::UserNotFound => "User not found".to_string(),
+                _ => "Withdrawal failed".to_string(),
             };
             Err((
                 StatusCode::BAD_REQUEST,

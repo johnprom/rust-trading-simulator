@@ -3,15 +3,17 @@
 ## Objective
 Full-stack local trading simulator with a Rust backend (Axum) and Dioxus frontend, enabling users to simulate trading strategies, visualize market data, and interact with a portfolio in real-time.
 
-## Current Status: Phase 2 Complete ✅
+## Current Status: Phase 2 Complete + Trading Pairs ✅
 
 **Live Features:**
 - 🔐 User authentication (login/signup/guest mode)
-- 💰 Multi-asset trading (BTC/USD, ETH/USD)
+- 💰 Multi-asset trading (BTC/USD, ETH/USD, BTC/ETH)
+- 🔄 Full trading pair support with cross-pair pricing
+- 💵 Deposit/Withdrawal system with lifetime tracking
 - 📊 Real-time price charts (1-hour history, 5s intervals)
 - 📈 Live price polling from Coinbase API
 - 💼 Portfolio management with persistent storage
-- 📜 Complete trade history tracking (filtered by asset)
+- 📜 Complete transaction history (trades, deposits, withdrawals)
 - 🗂️ Multi-tab UI (Dashboard, Markets, Trading)
 - 💾 SQLite database with user persistence
 - 🐳 Docker deployment ready
@@ -41,13 +43,17 @@ Full-stack local trading simulator with a Rust backend (Axum) and Dioxus fronten
 - `asset: String`
 - `price: f64`
 
-### Trade
+### Trade (Transaction)
 - `user_id: UserId`
-- `asset: Asset`
+- `transaction_type: TransactionType` (Trade/Deposit/Withdrawal enum)
+- `base_asset: Asset` (e.g., BTC in BTC/USD)
+- `quote_asset: Asset` (e.g., USD in BTC/USD)
 - `side: TradeSide` (Buy/Sell enum)
 - `quantity: f64`
-- `price: f64`
+- `price: f64` (in quote asset terms)
 - `timestamp: DateTime<Utc>`
+- `base_usd_price: Option<f64>` (USD snapshot for analytics)
+- `quote_usd_price: Option<f64>` (USD snapshot for analytics)
 
 
 
@@ -148,43 +154,65 @@ Full-stack local trading simulator with a Rust backend (Axum) and Dioxus fronten
 - ✅ Timestamp formatting for trade display
 
 **Multi-Asset Support** ✅ (COMPLETED)
-- ✅ Support 2 active markets: BTC/USD, ETH/USD
+- ✅ Support 3 active markets: BTC/USD, ETH/USD, BTC/ETH
+- ✅ Full trading pair model (base_asset/quote_asset)
+- ✅ Cross-pair pricing (BTC/ETH calculated from BTC-USD / ETH-USD)
+- ✅ USD snapshot tracking for portfolio analytics
 - ✅ Multiple price polling services for each asset (separate tokio tasks)
 - ✅ Tabular navigation structure:
-  - ✅ Dashboard tab (all balances, name, all trade history)
-  - ✅ Markets tab (preview of BTC and ETH with live graphs and prices)
-  - ✅ Trading view (per-asset trading interface with filtered history)
+  - ✅ Dashboard tab (all balances, name, transaction history)
+  - ✅ Markets tab (preview of all 3 markets with live graphs and prices)
+  - ✅ Trading view (per-pair trading interface with pair-specific history)
 - ✅ Asset-specific price windows (720 points per asset)
-- ✅ Trade form with dynamic asset context
+- ✅ Trade form with dynamic pair context
 - ✅ Active tab highlighting in navigation
 - ✅ Multi-asset portfolio display
 
-**Design Decision: Multi-Asset Implementation**
-- Implemented BTC/USD and ETH/USD (2 of 3 planned markets)
-- BTC/ETH cross-pair deferred to future phase (requires price calculation)
-- Backend price service spawns independent tasks per asset
-- Frontend maintains separate price/history signals per asset
-- Trading service already asset-agnostic (works with any asset string)
+**Design Decision: Trading Pairs Implementation**
+- Chose standard financial model: base_asset, quote_asset, price (in quote terms), quantity (of base)
+- USD snapshots captured at trade time for portfolio analytics and P&L calculations
+- Cross-pair pricing computed on-demand (no separate API calls needed)
+- Backward compatible via serde defaults (old trades automatically migrated)
+- Trading service handles all pairs uniformly (USD, non-USD, and cross-pairs)
+
+**Deposit/Withdrawal System** ✅ (COMPLETED)
+- ✅ Deposit endpoint with validation ($10 min, $100K max)
+- ✅ Withdrawal endpoint with balance checking
+- ✅ Unified transaction history (trades, deposits, withdrawals)
+- ✅ Lifetime statistics tracking:
+  - ✅ Lifetime funding (seed + deposits)
+  - ✅ Lifetime deposits
+  - ✅ Lifetime withdrawals
+- ✅ Dashboard UI with funding controls
+- ✅ Transaction type indicators in history table
+
+**Design Decision: Transaction Model**
+- Extended Trade struct with TransactionType enum instead of separate models
+- Deposits/withdrawals appear in unified transaction history
+- Lifetime stats calculated from transaction history (no separate fields)
+- All transactions tracked in same Vec<Trade> for chronological ordering
 
 
 
-### Phase 3 – Expanded Functionality & Bots
+### Phase 3 – Bot Framework & Advanced Features
 
-**Bot Framework** (MOVED FROM PHASE 2)
+**Bot Framework** (HIGH PRIORITY)
 - [ ] Bot framework that can read price window
 - [ ] Placeholder bot strategies (no execution yet)
 - [ ] Bot state tracking structure
+- [ ] Bot configuration interface
 
-**User Operations**
-- [ ] Mock deposit/withdraw USD endpoints
-- [ ] Frontend forms for deposits/withdrawals
-- [ ] Balance validation and updates
+**User Operations** ✅ (COMPLETED)
+- ✅ Deposit/withdraw USD endpoints
+- ✅ Frontend forms for deposits/withdrawals
+- ✅ Balance validation and transaction history
+- ✅ Lifetime funding statistics
 
-**Charts**
+**Charts** (OPTIONAL ENHANCEMENT)
 - [ ] Interactive charts with variable time windows
 - [ ] Zoom/pan functionality
-- [ ] Dynamic updates (live chart)
 - [ ] Multiple timeframe selection (1h, 24h, 7d)
+- [ ] Candlestick charts
 
 
 
@@ -256,10 +284,10 @@ Full-stack local trading simulator with a Rust backend (Axum) and Dioxus fronten
 | 2 | Trading history | Backend/Frontend | ✅ Complete |
 | 2 | Multi-asset support (BTC/ETH) | Backend/Frontend | ✅ Complete |
 | 2 | Multi-tab navigation | Frontend | ✅ Complete |
+| 2 | Trading pairs (BTC/ETH cross-pair) | Backend/Frontend | ✅ Complete |
+| 2 | Deposit/withdraw system | Frontend/Backend | ✅ Complete |
 | 3 | Bot framework | Backend | Pending |
-| 3 | Mock deposit/withdraw | Frontend/Backend | Pending |
 | 3 | Interactive graphs | Frontend | Pending |
-| 3 | BTC/ETH cross-pair | Backend/Frontend | Pending |
 | 4 | UX improvements | Frontend | Pending |
 | 4 | Async trading bots | Backend | Pending |
 | 4 | WebSockets | Backend/Frontend | Pending |
@@ -337,25 +365,22 @@ docker logs sim -f
 
 **Recommended Next Steps (Phase 3):**
 
-1. **Bot Framework** (High Priority)
+1. **Bot Framework** (High Priority - PRIMARY FOCUS)
    - Create bot trait/interface that reads price window
    - Implement placeholder bot strategies (no execution yet)
    - Add bot state tracking to AppState
    - Design bot configuration and storage
+   - Bot enable/disable per user
 
-2. **User Operations** (Medium Priority)
-   - Mock deposit/withdraw USD endpoints
-   - Frontend forms for deposits/withdrawals
-   - Balance validation and transaction history
-
-3. **Additional Assets** (Optional)
-   - Add BTC/ETH cross-pair trading
-   - Consider adding more USD pairs (SOL, DOGE, etc.)
-
-4. **Chart Enhancements** (Low Priority)
+2. **Chart Enhancements** (Optional)
    - Interactive charts with zoom/pan
    - Multiple timeframe selection (1h, 24h, 7d)
    - Candlestick charts
+   - Technical indicators (MA, RSI, MACD)
+
+3. **Additional Assets** (Optional)
+   - Add more USD pairs (SOL, DOGE, ADA, etc.)
+   - Additional cross-pairs (ETH/BTC, etc.)
 
 **Phase 4 Focus:**
 - Bot execution with async tasks
@@ -369,6 +394,10 @@ docker logs sim -f
 - SVG-based charting without external libraries
 - Database persistence with demo user reset behavior
 - Clean separation between guest and authenticated user experiences
-- Multi-asset trading with BTC and ETH
-- Comprehensive trade history tracking and display
+- Multi-asset trading with BTC, ETH, and cross-pairs
+- Full trading pair model with USD snapshots for analytics
+- Cross-pair pricing calculation (BTC/ETH)
+- Comprehensive transaction history (trades, deposits, withdrawals)
+- Deposit/withdrawal system with lifetime statistics
 - Professional multi-tab navigation UI
+- Backward-compatible schema migrations
