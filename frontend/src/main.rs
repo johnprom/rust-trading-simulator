@@ -779,10 +779,19 @@ fn App() -> Element {
                                     .sum();
                                 let lifetime_funding = 10000.0 + lifetime_deposits;
 
+                                // Calculate total trade volume in USD (estimated for cross-pairs)
+                                let total_trade_volume_usd: f64 = p.trade_history.iter()
+                                    .filter(|t| t.transaction_type == TransactionType::Trade)
+                                    .filter_map(|t| {
+                                        // Calculate USD value: quantity * price * quote_usd_price
+                                        t.quote_usd_price.map(|q_usd| t.quantity * t.price * q_usd)
+                                    })
+                                    .sum();
+
                                 rsx! {
                                     div { style: "margin-top: 20px; padding: 15px; background: white; border-radius: 4px; border: 1px solid #ddd;",
                                         h3 { style: "margin-top: 0;", "Lifetime Statistics" }
-                                        div { style: "display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; text-align: center;",
+                                        div { style: "display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 15px; text-align: center;",
                                             div {
                                                 p { style: "margin: 0; font-size: 12px; color: #666;", "Total Funding" }
                                                 p { style: "margin: 5px 0 0 0; font-size: 20px; font-weight: bold; color: #4caf50;", "${lifetime_funding:.2}" }
@@ -794,6 +803,10 @@ fn App() -> Element {
                                             div {
                                                 p { style: "margin: 0; font-size: 12px; color: #666;", "Total Withdrawals" }
                                                 p { style: "margin: 5px 0 0 0; font-size: 20px; font-weight: bold; color: #f44336;", "${lifetime_withdrawals:.2}" }
+                                            }
+                                            div {
+                                                p { style: "margin: 0; font-size: 12px; color: #666;", "Trade Volume (USD)" }
+                                                p { style: "margin: 5px 0 0 0; font-size: 20px; font-weight: bold; color: #2196F3;", "${total_trade_volume_usd:.2}" }
                                             }
                                         }
                                     }
@@ -857,8 +870,29 @@ fn App() -> Element {
                                                         }
                                                     }
                                                     td { style: "padding: 10px; text-align: right;", "{trade.quantity:.8}" }
-                                                    td { style: "padding: 10px; text-align: right;", "${trade.price:.2}" }
-                                                    td { style: "padding: 10px; text-align: right;", "${trade.price * trade.quantity:.2}" }
+                                                    // Price column - show in quote asset terms
+                                                    td {
+                                                        style: "padding: 10px; text-align: right;",
+                                                        {
+                                                            if trade.quote_asset == "USD" {
+                                                                format!("${:.2}", trade.price)
+                                                            } else {
+                                                                format!("{:.4} {}", trade.price, trade.quote_asset)
+                                                            }
+                                                        }
+                                                    }
+                                                    // Total column - show in quote asset terms
+                                                    td {
+                                                        style: "padding: 10px; text-align: right;",
+                                                        {
+                                                            let total = trade.price * trade.quantity;
+                                                            if trade.quote_asset == "USD" {
+                                                                format!("${:.2}", total)
+                                                            } else {
+                                                                format!("{:.4} {}", total, trade.quote_asset)
+                                                            }
+                                                        }
+                                                    }
                                                     td { style: "padding: 10px;", "{format_timestamp(&trade.timestamp)}" }
                                                 }
                                             }
@@ -1269,8 +1303,29 @@ fn App() -> Element {
                                                                         "{trade.side:?}"
                                                                     }
                                                                     td { style: "padding: 10px; text-align: right;", "{trade.quantity:.8}" }
-                                                                    td { style: "padding: 10px; text-align: right;", "${trade.price:.2}" }
-                                                                    td { style: "padding: 10px; text-align: right;", "${trade.price * trade.quantity:.2}" }
+                                                                    // Price column - show in quote asset terms
+                                                                    td {
+                                                                        style: "padding: 10px; text-align: right;",
+                                                                        {
+                                                                            if trade.quote_asset == "USD" {
+                                                                                format!("${:.2}", trade.price)
+                                                                            } else {
+                                                                                format!("{:.4} {}", trade.price, trade.quote_asset)
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                    // Total column - show in quote asset terms
+                                                                    td {
+                                                                        style: "padding: 10px; text-align: right;",
+                                                                        {
+                                                                            let total = trade.price * trade.quantity;
+                                                                            if trade.quote_asset == "USD" {
+                                                                                format!("${:.2}", total)
+                                                                            } else {
+                                                                                format!("{:.4} {}", total, trade.quote_asset)
+                                                                            }
+                                                                        }
+                                                                    }
                                                                     td { style: "padding: 10px;", "{format_timestamp(&trade.timestamp)}" }
                                                                 }
                                                             }

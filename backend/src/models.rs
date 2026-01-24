@@ -130,4 +130,13 @@ impl UserData {
     pub fn lifetime_funding(&self) -> f64 {
         10000.0 + self.lifetime_deposits()
     }
+
+    /// Calculate total trade volume in USD (estimated for non-USD pairs)
+    pub fn total_trade_volume_usd(&self) -> f64 {
+        self.trade_history
+            .iter()
+            .filter(|t| t.transaction_type == TransactionType::Trade)
+            .filter_map(|t| t.usd_value())
+            .sum()
+    }
 }
