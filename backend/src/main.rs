@@ -1,4 +1,5 @@
 mod api_client;
+mod bots;
 mod db;
 mod models;
 mod routes;
@@ -78,7 +79,10 @@ async fn main() {
         .route("/deposit", post(routes::trade::post_deposit))
         .route("/withdrawal", post(routes::trade::post_withdrawal))
         .route("/signup", post(routes::auth::signup))
-        .route("/login", post(routes::auth::login));
+        .route("/login", post(routes::auth::login))
+        .route("/bot/start", post(routes::bot::start_bot))
+        .route("/bot/stop", post(routes::bot::stop_bot))
+        .route("/bot/status", get(routes::bot::bot_status));
 
     let app = Router::new()
         .nest("/api", api_routes)

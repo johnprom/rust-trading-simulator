@@ -52,6 +52,10 @@ pub struct Trade {
     pub base_usd_price: Option<f64>,   // USD price of base asset at trade time
     #[serde(default)]
     pub quote_usd_price: Option<f64>,  // USD price of quote asset at trade time
+
+    // Bot execution tracking (None if manual trade)
+    #[serde(default)]
+    pub executed_by_bot: Option<String>,  // Bot name if trade was executed by a bot
 }
 
 fn default_quote_asset() -> String {

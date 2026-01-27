@@ -18,6 +18,11 @@ WORKDIR /app/backend
 COPY backend/Cargo.toml backend/Cargo.lock* ./
 COPY backend/src ./src
 COPY backend/migrations ./migrations
+
+# Run tests before building release (fails build if tests fail)
+RUN cargo test --release
+
+# Build release binary
 RUN cargo build --release
 
 # Runtime

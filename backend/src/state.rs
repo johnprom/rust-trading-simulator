@@ -3,6 +3,7 @@ use crate::db::Database;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tokio::task::JoinHandle;
 
 const PRICE_WINDOW_SIZE: usize = 17280; // 24h * 60min * 12 (5s intervals)
 
@@ -12,10 +13,19 @@ pub struct AppState {
     pub db: Database,
 }
 
+/// Bot instance information for a running bot
+pub struct BotInstance {
+    pub bot_name: String,
+    pub trading_pair: (String, String), // (base_asset, quote_asset)
+    pub stoploss_amount: f64,
+    pub initial_portfolio_value_usd: f64, // Portfolio value when bot started
+    pub task_handle: JoinHandle<()>,
+}
+
 pub struct AppStateInner {
     pub users: HashMap<UserId, UserData>,
     pub price_window: Vec<PricePoint>,
-    // Phase 4: pub bots: HashMap<UserId, BotTaskHandle>,
+    pub active_bots: HashMap<UserId, BotInstance>, // One bot per user maximum
 }
 
 impl AppState {
@@ -43,6 +53,7 @@ impl AppState {
             inner: Arc::new(RwLock::new(AppStateInner {
                 users,
                 price_window: Vec::with_capacity(PRICE_WINDOW_SIZE),
+                active_bots: HashMap::new(),
             })),
             db,
         }

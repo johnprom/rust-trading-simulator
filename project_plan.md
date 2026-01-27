@@ -194,13 +194,60 @@ Full-stack local trading simulator with a Rust backend (Axum) and Dioxus fronten
 
 
 
-### Phase 3 – Bot Framework & Advanced Features
+### Phase 3 – Bot Framework
 
-**Bot Framework** (HIGH PRIORITY)
-- [ ] Bot framework that can read price window
+**Bot Framework Design**
+
+Bots are modular trading strategies that run autonomously on behalf of a user. Each bot:
+- Executes on a 60-second cadence via Tokio tasks
+- Reads price window data and current balances
+- Makes simple buy/sell decisions per tick
+- Runs until stopped by user, stoploss hit, insufficient funds, or task failure
+
+**Architecture:**
+- **TradingBot Trait**: Common interface with `tick()` method that returns `BotDecision` (DoNothing, Buy, Sell)
+- **BotContext**: Passed to each tick containing:
+  - Price window (recent historical data)
+  - Current portfolio balances
+  - Current market price
+  - Bot's runtime state (managed by bot implementation)
+- **Bot Instance**: One bot per account maximum
+- **Trading Lock**: Full account trading lock when any bot is active (all markets locked)
+- **Stoploss**: Loss threshold in quote asset terms (e.g., USD for USD pairs, ETH for BTC/ETH)
+- **Bot Registry**: Pattern for easy addition of new bot strategies
+
+**Execution Model:**
+- Bot spawned as async Tokio task when user starts it
+- Runs every 60 seconds, calling `tick()` on bot implementation
+- Bot builds and maintains its own runtime state between ticks
+- Trades executed by bot are marked with bot identifier in transaction history
+- Graceful shutdown on: user stop, stoploss breach, insufficient funds, task error
+
+**Example Bot Structure:**
+```rust
+trait TradingBot {
+    fn tick(&mut self, ctx: &BotContext) -> BotDecision;
+}
+
+struct BotContext {
+    price_window: Vec<PricePoint>,
+    balances: HashMap<Asset, f64>,
+    current_price: f64,
+}
+
+enum BotDecision {
+    DoNothing,
+    Buy { quantity: f64 },
+    Sell { quantity: f64 },
+}
+```
+
+**Bot Framework Infrastructure**
+- [ ] Bot trait/interface that can read price window
 - [ ] Placeholder bot strategies (no execution yet)
-- [ ] Bot state tracking structure
-- [ ] Bot configuration interface
+- [ ] Bot state tracking structure in AppState
+- [ ] Bot configuration data model
+- [ ] Bot metadata storage in database
 
 **User Operations** ✅ (COMPLETED)
 - ✅ Deposit/withdraw USD endpoints
@@ -208,36 +255,50 @@ Full-stack local trading simulator with a Rust backend (Axum) and Dioxus fronten
 - ✅ Balance validation and transaction history
 - ✅ Lifetime funding statistics
 
-**Charts** (OPTIONAL ENHANCEMENT)
+
+
+### Phase 4 – Bot Integration & Automation
+
+**Bot Execution**
+- [ ] Bot enable/disable per user profile
+- [ ] Spawn Tokio tasks for asynchronous bot execution
+- [ ] Bot reads price window and executes trades autonomously
+- [ ] Bot lifecycle management (start/stop/restart)
+- [ ] Bot error handling and resilience
+
+**Bot UI & Management**
+- [ ] Bot configuration interface
+- [ ] Bot performance tracking dashboard
+- [ ] Bot activity logs
+- [ ] Multiple bot strategies per user
+- [ ] Strategy selection/configuration UI
+
+
+
+### Phase 5 – Advanced Features & UX
+
+**Frontend Enhancements**
+- [ ] Landing page
+- [ ] Improved trading dashboard
+- [ ] Better UI/UX design and styling
+
+**Charts Enhancements**
 - [ ] Interactive charts with variable time windows
 - [ ] Zoom/pan functionality
 - [ ] Multiple timeframe selection (1h, 24h, 7d)
 - [ ] Candlestick charts
+- [ ] Technical indicators (MA, RSI, MACD)
 
-
-
-### Phase 4 – UX & Automation
-
-**Frontend**
-- [ ] Landing page
-- [ ] Login/signup pages
-- [ ] User profile page
-- [ ] Improved trading dashboard
-- [ ] Better UI/UX design and styling
-
-**Trading Bots**
-- [ ] Bot enable/disable per user profile
-- [ ] Spawn Tokio tasks for asynchronous bot execution
-- [ ] Bot reads price window and executes trades autonomously
-- [ ] Bot configuration interface
-- [ ] Bot performance tracking
-
-**Advanced Features**
+**Real-time Features**
 - [ ] WebSocket support for real-time updates
 - [ ] Live price streaming to frontend
-- [ ] Multiple bot strategies per user
-- [ ] Strategy selection/configuration UI
+- [ ] Real-time bot status updates
+
+**Additional Features**
 - [ ] Bot marketplace or strategy library
+- [ ] Additional trading pairs (SOL, DOGE, etc.)
+- [ ] Export trade history (CSV, JSON)
+- [ ] Advanced portfolio analytics
 
 
 
@@ -286,12 +347,15 @@ Full-stack local trading simulator with a Rust backend (Axum) and Dioxus fronten
 | 2 | Multi-tab navigation | Frontend | ✅ Complete |
 | 2 | Trading pairs (BTC/ETH cross-pair) | Backend/Frontend | ✅ Complete |
 | 2 | Deposit/withdraw system | Frontend/Backend | ✅ Complete |
-| 3 | Bot framework | Backend | Pending |
-| 3 | Interactive graphs | Frontend | Pending |
-| 4 | UX improvements | Frontend | Pending |
-| 4 | Async trading bots | Backend | Pending |
-| 4 | WebSockets | Backend/Frontend | Pending |
-| 4 | Multiple bot strategies | Backend | Pending |
+| 3 | Bot framework infrastructure | Backend | Pending |
+| 3 | Bot data models & storage | Backend | Pending |
+| 4 | Bot execution & lifecycle | Backend | Pending |
+| 4 | Bot UI & management | Frontend | Pending |
+| 4 | Bot performance tracking | Backend/Frontend | Pending |
+| 5 | Interactive charts | Frontend | Pending |
+| 5 | UX improvements | Frontend | Pending |
+| 5 | WebSockets | Backend/Frontend | Pending |
+| 5 | Advanced features | Backend/Frontend | Pending |
 
 ## Current Implementation Status
 
@@ -363,30 +427,39 @@ docker logs sim -f
 - ✅ Live price polling for multiple assets (separate tasks per asset)
 - ✅ Active tab highlighting in navigation
 
-**Recommended Next Steps (Phase 3):**
+**Recommended Next Steps:**
 
-1. **Bot Framework** (High Priority - PRIMARY FOCUS)
+**Phase 3 - Bot Framework** (PRIMARY FOCUS)
+1. **Bot Infrastructure**
    - Create bot trait/interface that reads price window
    - Implement placeholder bot strategies (no execution yet)
    - Add bot state tracking to AppState
-   - Design bot configuration and storage
-   - Bot enable/disable per user
+   - Design bot configuration data model
+   - Bot metadata storage in database
 
-2. **Chart Enhancements** (Optional)
+**Phase 4 - Bot Integration**
+1. **Bot Execution**
+   - Bot enable/disable per user profile
+   - Spawn Tokio tasks for asynchronous bot execution
+   - Bot lifecycle management (start/stop/restart)
+   - Bot error handling and resilience
+
+2. **Bot Management UI**
+   - Bot configuration interface
+   - Bot performance tracking dashboard
+   - Bot activity logs
+
+**Phase 5 - Advanced Features**
+1. **Chart Enhancements**
    - Interactive charts with zoom/pan
    - Multiple timeframe selection (1h, 24h, 7d)
    - Candlestick charts
-   - Technical indicators (MA, RSI, MACD)
+   - Technical indicators
 
-3. **Additional Assets** (Optional)
-   - Add more USD pairs (SOL, DOGE, ADA, etc.)
-   - Additional cross-pairs (ETH/BTC, etc.)
-
-**Phase 4 Focus:**
-- Bot execution with async tasks
-- WebSocket support for real-time updates
-- Multiple bot strategies per user
-- Enhanced UX and styling
+2. **Real-time & UX**
+   - WebSocket support
+   - Enhanced UI/UX design
+   - Additional trading pairs
 
 **Key Achievements:**
 - Real historical data integration with interpolation
@@ -401,3 +474,21 @@ docker logs sim -f
 - Deposit/withdrawal system with lifetime statistics
 - Professional multi-tab navigation UI
 - Backward-compatible schema migrations
+
+---
+
+## Bot Framework Design Specification
+
+**Core Philosophy**: Bots are trait-based modules that own their internal state and execute trading decisions based on raw market data. The framework provides immutable context each tick while bots maintain mutable state across cycles.
+
+**Bot State Management**: Each bot instance owns its state entirely in memory - accumulators, custom data structures, flags, and bot-specific trade history are all managed within the bot struct itself. This state exists only during the bot's lifetime and does not persist across app restarts. When a bot starts, it begins with a clean slate. When stopped or the app restarts, all bot state is discarded.
+
+**Decision Model - Quote Asset Terms**: All trading decisions are expressed in quote asset terms (e.g., USD for BTC/USD pairs). The user provides a stoploss amount in quote asset (e.g., $10,000), and bots dispatch decisions like "Buy $100 worth of BTC" or "Sell $100 worth of BTC". This creates an intuitive mental model where stoploss, step-size, and decisions all operate in the same currency unit. The framework converts quote amounts to base quantities during execution using current market price.
+
+**Data Access**: Bots receive raw, uninterpolated price data from the 5-second polling window (not the interpolated historical backfill). The BotContext includes the raw price_window Vec<PricePoint>, current balances, current market price, and trading pair metadata. Bots do NOT see global trade history - they only see their own trades, which they can track as part of their internal state if needed (as a standardized field in the bot struct template).
+
+**Stoploss Enforcement**: The framework (not the bot) is responsible for stoploss checking. Stoploss is evaluated against total portfolio value (all assets converted to USD equivalent) since bots impose a full trading lock across all markets. The reference point is the portfolio value when the bot started. After each tick, before executing any trade decision, the framework calculates current portfolio value and terminates the bot if losses exceed the stoploss threshold.
+
+**Framework vs Bot Responsibilities**: The framework handles validation (sufficient balance, valid quantities), execution (converting quote amounts to base quantities, executing trades at market price), stoploss monitoring, and bot lifecycle (start/stop/error handling). The bot only needs to implement the `tick()` method which examines context and returns a BotDecision. Bots can maintain arbitrary state between ticks using standard Rust fields in their struct - counters, moving averages, custom indicators, or any algorithm-specific data.
+
+**Example Flow**: User starts a bot with $10,000 stoploss on BTC/USD market. Bot struct initializes with empty state. Every 60 seconds: (1) Framework assembles BotContext with latest price window and balances, (2) Calls bot's `tick()` method which updates internal state and returns decision, (3) Framework validates decision won't breach stoploss or balances, (4) Executes trade if valid, marking it as bot-executed in transaction history, (5) Repeats until user stops, stoploss hit, insufficient funds, or task error.

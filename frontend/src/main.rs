@@ -87,6 +87,8 @@ struct Trade {
     base_usd_price: Option<f64>,
     #[serde(default)]
     quote_usd_price: Option<f64>,
+    #[serde(default)]
+    executed_by_bot: Option<String>,
 }
 
 fn default_quote_usd() -> String {
@@ -97,6 +99,30 @@ impl Trade {
     fn asset(&self) -> &str {
         &self.base_asset
     }
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct StartBotRequest {
+    user_id: String,
+    bot_name: String,
+    base_asset: String,
+    quote_asset: String,
+    stoploss_amount: f64,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct BotResponse {
+    success: bool,
+    message: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct BotStatusResponse {
+    is_active: bool,
+    bot_name: Option<String>,
+    trading_pair: Option<String>,
+    stoploss_amount: Option<f64>,
+    initial_portfolio_value: Option<f64>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
@@ -314,6 +340,11 @@ fn App() -> Element {
     let mut auth_password = use_signal(|| String::new());
     let mut auth_error = use_signal(|| String::new());
 
+    // Bot state
+    let mut bot_status = use_signal(|| None::<BotStatusResponse>);
+    let mut bot_stoploss = use_signal(|| String::from("1000"));
+    let mut selected_bot = use_signal(|| String::from("naive_momentum"));
+
     // Fetch BTC price on mount and every 5 seconds
     use_effect(move || {
         spawn(async move {
@@ -503,6 +534,24 @@ fn App() -> Element {
         }
     });
 
+    // Poll portfolio every 10 seconds when bot is active
+    use_effect(move || {
+        spawn(async move {
+            loop {
+                gloo_timers::future::TimeoutFuture::new(10_000).await;
+
+                // Only poll if in trading view and bot is active
+                if matches!(current_view(), AppView::Trading(_)) {
+                    if let Some(status) = bot_status() {
+                        if status.is_active {
+                            fetch_portfolio();
+                        }
+                    }
+                }
+            }
+        });
+    });
+
     let execute_trade = move |side: &str, asset: &str, quote_asset_opt: Option<String>| {
         let side = side.to_string();
         let asset = asset.to_string();
@@ -611,6 +660,113 @@ fn App() -> Element {
                             status.set(error_resp.error);
                         } else {
                             status.set("Withdrawal failed".to_string());
+                        }
+                    }
+                }
+                Err(e) => status.set(format!("Error: {}", e)),
+            }
+        });
+    };
+
+    // Fetch bot status when in Trading view
+    let fetch_bot_status = move || {
+        let uid = user_id();
+        spawn(async move {
+            if let Ok(resp) = reqwest::get(format!("{}/bot/status?user_id={}", API_BASE, uid)).await {
+                if let Ok(data) = resp.json::<BotStatusResponse>().await {
+                    bot_status.set(Some(data));
+                }
+            }
+        });
+    };
+
+    use_effect(move || {
+        // Poll bot status every 5 seconds when in Trading view
+        match current_view() {
+            AppView::Trading(_) => {
+                fetch_bot_status();
+                spawn(async move {
+                    loop {
+                        gloo_timers::future::TimeoutFuture::new(5_000).await;
+                        if matches!(current_view(), AppView::Trading(_)) {
+                            fetch_bot_status();
+                        } else {
+                            break;
+                        }
+                    }
+                });
+            }
+            _ => {}
+        }
+    });
+
+    let start_bot = move |base_asset: String, quote_asset: String| {
+        let stoploss = bot_stoploss().parse::<f64>().unwrap_or(1000.0);
+        let bot_name = selected_bot();
+        let uid = user_id();
+
+        spawn(async move {
+            let request = StartBotRequest {
+                user_id: uid.clone(),
+                bot_name,
+                base_asset,
+                quote_asset,
+                stoploss_amount: stoploss,
+            };
+
+            let client = reqwest::Client::new();
+            match client
+                .post(format!("{}/bot/start", API_BASE))
+                .json(&request)
+                .send()
+                .await
+            {
+                Ok(response) => {
+                    if response.status().is_success() {
+                        if let Ok(bot_resp) = response.json::<BotResponse>().await {
+                            status.set(bot_resp.message);
+                            // Immediately fetch updated bot status
+                            if let Ok(resp) = reqwest::get(format!("{}/bot/status?user_id={}", API_BASE, uid)).await {
+                                if let Ok(data) = resp.json::<BotStatusResponse>().await {
+                                    bot_status.set(Some(data));
+                                }
+                            }
+                        }
+                    } else {
+                        if let Ok(error) = response.text().await {
+                            status.set(format!("Bot start failed: {}", error));
+                        }
+                    }
+                }
+                Err(e) => status.set(format!("Error: {}", e)),
+            }
+        });
+    };
+
+    let stop_bot = move || {
+        let uid = user_id();
+
+        spawn(async move {
+            let client = reqwest::Client::new();
+            match client
+                .post(format!("{}/bot/stop?user_id={}", API_BASE, uid.clone()))
+                .send()
+                .await
+            {
+                Ok(response) => {
+                    if response.status().is_success() {
+                        if let Ok(bot_resp) = response.json::<BotResponse>().await {
+                            status.set(bot_resp.message);
+                            // Immediately fetch updated bot status
+                            if let Ok(resp) = reqwest::get(format!("{}/bot/status?user_id={}", API_BASE, uid)).await {
+                                if let Ok(data) = resp.json::<BotStatusResponse>().await {
+                                    bot_status.set(Some(data));
+                                }
+                            }
+                        }
+                    } else {
+                        if let Ok(error) = response.text().await {
+                            status.set(format!("Bot stop failed: {}", error));
                         }
                     }
                 }
@@ -1264,6 +1420,78 @@ fn App() -> Element {
                                 }
                             }
 
+                            // Bot Controls
+                            div { class: "bot-controls",
+                                style: "background: #e3f2fd; padding: 20px; border-radius: 8px; margin: 20px 0; border: 2px solid #2196F3;",
+                                h2 { style: "margin-bottom: 15px;", "Trading Bot" }
+
+                                // Bot Status Display
+                                if let Some(status) = bot_status() {
+                                    if status.is_active {
+                                        div { style: "background: #c8e6c9; padding: 15px; border-radius: 6px; margin-bottom: 15px; border-left: 4px solid #4caf50;",
+                                            p { style: "margin: 0; font-weight: bold; color: #2e7d32;", "🤖 Bot Active" }
+                                            if let Some(bot_name) = &status.bot_name {
+                                                p { style: "margin: 5px 0 0 0; font-size: 14px;", "Bot: {bot_name}" }
+                                            }
+                                            if let Some(pair) = &status.trading_pair {
+                                                p { style: "margin: 5px 0 0 0; font-size: 14px;", "Pair: {pair}" }
+                                            }
+                                            if let Some(stoploss) = status.stoploss_amount {
+                                                p { style: "margin: 5px 0 0 0; font-size: 14px;", "Stoploss: ${stoploss:.2}" }
+                                            }
+                                            if let Some(initial_value) = status.initial_portfolio_value {
+                                                p { style: "margin: 5px 0 0 0; font-size: 14px;", "Started at: ${initial_value:.2}" }
+                                            }
+                                        }
+
+                                        button {
+                                            onclick: move |_| stop_bot(),
+                                            style: "width: 100%; padding: 12px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold;",
+                                            "Stop Bot"
+                                        }
+                                    } else {
+                                        div { style: "background: #fff3cd; padding: 15px; border-radius: 6px; margin-bottom: 15px; border-left: 4px solid #ff9800;",
+                                            p { style: "margin: 0; font-weight: bold; color: #e65100;", "⏸️ No Bot Running" }
+                                            p { style: "margin: 5px 0 0 0; font-size: 13px; color: #666;", "Configure and start a bot to trade automatically" }
+                                        }
+
+                                        div { style: "margin-bottom: 15px;",
+                                            label { style: "display: block; margin-bottom: 5px; font-weight: bold;", "Bot Strategy:" }
+                                            select {
+                                                value: "{selected_bot}",
+                                                onchange: move |e| selected_bot.set(e.value()),
+                                                style: "width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;",
+                                                option { value: "naive_momentum", "Naive Momentum (Buy on 3↑, Sell on 3↓)" }
+                                            }
+                                        }
+
+                                        div { style: "margin-bottom: 15px;",
+                                            label { style: "display: block; margin-bottom: 5px; font-weight: bold;", "Stoploss ({quote_asset}):" }
+                                            input {
+                                                r#type: "number",
+                                                step: "100",
+                                                value: "{bot_stoploss}",
+                                                oninput: move |e| bot_stoploss.set(e.value()),
+                                                style: "width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;",
+                                            }
+                                            p { style: "margin: 5px 0 0 0; font-size: 12px; color: #666;", "Maximum loss before bot stops (step size will be 1% of this)" }
+                                        }
+
+                                        button {
+                                            onclick: {
+                                                let base = base_asset.to_string();
+                                                let quote = quote_asset.to_string();
+                                                move |_| start_bot(base.clone(), quote.clone())
+                                            },
+                                            style: "width: 100%; padding: 12px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold;",
+                                            "Start Bot"
+                                        }
+                                    }
+                                } else {
+                                    p { style: "color: #666;", "Loading bot status..." }
+                                }
+                            }
+
                             // Trade History filtered by base_asset
                             if let Some(p) = portfolio() {
                                 div { class: "trade-history",
@@ -1288,6 +1516,7 @@ fn App() -> Element {
                                                                 th { style: "padding: 10px; text-align: right;", "Quantity" }
                                                                 th { style: "padding: 10px; text-align: right;", "Price" }
                                                                 th { style: "padding: 10px; text-align: right;", "Total" }
+                                                                th { style: "padding: 10px; text-align: center;", "Source" }
                                                                 th { style: "padding: 10px; text-align: left;", "Time" }
                                                             }
                                                         }
@@ -1323,6 +1552,17 @@ fn App() -> Element {
                                                                                 format!("${:.2}", total)
                                                                             } else {
                                                                                 format!("{:.4} {}", total, trade.quote_asset)
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                    // Source column - show bot icon if executed by bot
+                                                                    td {
+                                                                        style: "padding: 10px; text-align: center;",
+                                                                        {
+                                                                            if let Some(bot_name) = &trade.executed_by_bot {
+                                                                                format!("🤖 {}", bot_name)
+                                                                            } else {
+                                                                                "Manual".to_string()
                                                                             }
                                                                         }
                                                                     }

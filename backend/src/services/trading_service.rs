@@ -13,6 +13,7 @@ pub enum TradeError {
     WithdrawalExceedsBalance,
 }
 
+/// Execute a trade for manual (UI) trades
 pub async fn execute_trade(
     state: &AppState,
     user_id: &UserId,
@@ -31,8 +32,6 @@ pub async fn execute_trade(
         .await
         .ok_or(TradeError::PriceUnavailable)?;
 
-    let quote_cost = price * quantity;
-
     // Capture USD prices at trade time for analytics
     let base_usd_price = if base_asset == "USD" {
         Some(1.0)
@@ -45,6 +44,40 @@ pub async fn execute_trade(
     } else {
         state.get_latest_price(quote_asset).await
     };
+
+    execute_trade_internal(
+        state,
+        user_id,
+        base_asset,
+        quote_asset,
+        side,
+        quantity,
+        price,
+        base_usd_price,
+        quote_usd_price,
+        None, // No bot name for manual trades
+    )
+    .await
+}
+
+/// Internal trade execution with full control (used by bots)
+pub(crate) async fn execute_trade_internal(
+    state: &AppState,
+    user_id: &UserId,
+    base_asset: &str,
+    quote_asset: &str,
+    side: TradeSide,
+    quantity: f64,
+    price: f64,
+    base_usd_price: Option<f64>,
+    quote_usd_price: Option<f64>,
+    executed_by_bot: Option<String>,
+) -> Result<Trade, TradeError> {
+    if quantity <= 0.0 {
+        return Err(TradeError::InvalidQuantity);
+    }
+
+    let quote_cost = price * quantity;
 
     // Check balances first before attempting the trade
     let user = state.get_user(user_id).await.ok_or(TradeError::UserNotFound)?;
@@ -76,6 +109,7 @@ pub async fn execute_trade(
         timestamp: chrono::Utc::now(),
         base_usd_price,
         quote_usd_price,
+        executed_by_bot,
     };
 
     // Execute the trade and record it in history
@@ -128,6 +162,7 @@ pub async fn deposit(
         timestamp: chrono::Utc::now(),
         base_usd_price: Some(1.0),
         quote_usd_price: Some(1.0),
+        executed_by_bot: None,
     };
 
     // Add USD to balance and record transaction
@@ -171,6 +206,7 @@ pub async fn withdraw(
         timestamp: chrono::Utc::now(),
         base_usd_price: Some(1.0),
         quote_usd_price: Some(1.0),
+        executed_by_bot: None,
     };
 
     // Deduct USD from balance and record transaction
