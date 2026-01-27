@@ -864,16 +864,31 @@ fn App() -> Element {
                             style: "background: #e8f5e9; padding: 20px; border-radius: 8px; margin: 20px 0;",
                             h2 { "Portfolio" }
                             {
-                                let usd_balance = p.asset_balances.get("USD").copied().unwrap_or(0.0);
+                                // Calculate total portfolio value in USD
+                                let mut total_value_usd = 0.0;
+                                for (asset, balance) in p.asset_balances.iter() {
+                                    if asset == "USD" {
+                                        total_value_usd += balance;
+                                    } else if asset == "BTC" {
+                                        total_value_usd += balance * btc_price();
+                                    } else if asset == "ETH" {
+                                        total_value_usd += balance * eth_price();
+                                    }
+                                }
+
                                 rsx! {
-                                    p { style: "font-size: 18px; font-weight: bold; margin-bottom: 10px;", "Cash: ${usd_balance:.2}" }
+                                    p { style: "font-size: 18px; font-weight: bold; margin-bottom: 15px;",
+                                        "Estimated Total Value: ${total_value_usd:.2}"
+                                    }
                                 }
                             }
 
-                            if !p.asset_balances.is_empty() {
-                                h3 { style: "margin-top: 20px; margin-bottom: 10px;", "Assets" }
-                                for (asset, balance) in p.asset_balances.iter() {
-                                    if asset != "USD" && *balance > 0.0 {
+                            h3 { style: "margin-top: 20px; margin-bottom: 10px;", "Assets" }
+                            for (asset, balance) in p.asset_balances.iter() {
+                                if *balance > 0.0 || asset == "USD" {
+                                    if asset == "USD" {
+                                        p { style: "font-size: 16px; margin: 5px 0;", "USD: ${balance:.2}" }
+                                    } else {
                                         p { style: "font-size: 16px; margin: 5px 0;", "{asset}: {balance:.8}" }
                                     }
                                 }
@@ -987,6 +1002,7 @@ fn App() -> Element {
                                                 th { style: "padding: 10px; text-align: right;", "Quantity" }
                                                 th { style: "padding: 10px; text-align: right;", "Price" }
                                                 th { style: "padding: 10px; text-align: right;", "Total" }
+                                                th { style: "padding: 10px; text-align: center;", "Source" }
                                                 th { style: "padding: 10px; text-align: left;", "Time" }
                                             }
                                         }
@@ -1046,6 +1062,17 @@ fn App() -> Element {
                                                                 format!("${:.2}", total)
                                                             } else {
                                                                 format!("{:.4} {}", total, trade.quote_asset)
+                                                            }
+                                                        }
+                                                    }
+                                                    // Source column - show bot icon if executed by bot
+                                                    td {
+                                                        style: "padding: 10px; text-align: center;",
+                                                        {
+                                                            if let Some(bot_name) = &trade.executed_by_bot {
+                                                                format!("🤖 {}", bot_name)
+                                                            } else {
+                                                                "Manual".to_string()
                                                             }
                                                         }
                                                     }
@@ -1368,8 +1395,41 @@ fn App() -> Element {
                                 div { class: "portfolio",
                                     style: "background: #e8f5e9; padding: 20px; border-radius: 8px; margin: 20px 0;",
                                     h2 { "Portfolio" }
-                                    p { style: "font-size: 16px;", "{base_asset}: {p.asset_balances.get(base_asset).unwrap_or(&0.0):.8}" }
-                                    p { style: "font-size: 16px;", "{quote_asset}: {p.asset_balances.get(quote_asset).unwrap_or(&0.0):.8}" }
+                                    {
+                                        // Calculate total portfolio value in USD
+                                        let mut total_value_usd = 0.0;
+                                        for (asset, balance) in p.asset_balances.iter() {
+                                            if asset == "USD" {
+                                                total_value_usd += balance;
+                                            } else if asset == "BTC" {
+                                                total_value_usd += balance * btc_price();
+                                            } else if asset == "ETH" {
+                                                total_value_usd += balance * eth_price();
+                                            }
+                                        }
+
+                                        let base_balance = p.asset_balances.get(base_asset).copied().unwrap_or(0.0);
+                                        let quote_balance = p.asset_balances.get(quote_asset).copied().unwrap_or(0.0);
+
+                                        rsx! {
+                                            p { style: "font-size: 18px; font-weight: bold; margin-bottom: 15px;",
+                                                "Estimated Total Value: ${total_value_usd:.2}"
+                                            }
+                                            {
+                                                if quote_asset == "USD" {
+                                                    rsx! {
+                                                        p { style: "font-size: 16px; margin: 5px 0;", "USD: ${quote_balance:.2}" }
+                                                        p { style: "font-size: 16px; margin: 5px 0;", "{base_asset}: {base_balance:.8}" }
+                                                    }
+                                                } else {
+                                                    rsx! {
+                                                        p { style: "font-size: 16px; margin: 5px 0;", "{base_asset}: {base_balance:.8}" }
+                                                        p { style: "font-size: 16px; margin: 5px 0;", "{quote_asset}: {quote_balance:.8}" }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
 
