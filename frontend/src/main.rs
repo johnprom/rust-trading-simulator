@@ -556,6 +556,30 @@ fn CandlestickChart(props: CandlestickChartProps) -> Element {
         width / 2.0, height - 10.0
     ));
 
+    // Clone values needed for closures
+    let padding_left_clone = padding_left;
+    let chart_width_clone = chart_width;
+    let candles_len = candles.len();
+
+    // Build tooltip HTML if hovering
+    let tooltip_html = if let Some(idx) = hover_candle_idx() {
+        if idx < candles.len() {
+            let candle = &candles[idx];
+            let dt = chrono::DateTime::from_timestamp(candle.timestamp, 0).unwrap();
+            let x_pos = padding_left_clone + (idx as f64 + 0.5) * candle_spacing;
+            Some(format!(
+                "<div style=\"position: absolute; left: {}px; top: {}px; background: rgba(0,0,0,0.85); color: white; padding: 8px; border-radius: 4px; pointer-events: none; font-size: 12px; white-space: nowrap; z-index: 1000; transform: translateX(-50%);\"><div>{}</div><div>Open: ${:.2}</div><div>High: ${:.2}</div><div>Low: ${:.2}</div><div>Close: ${:.2}</div></div>",
+                x_pos, 10.0,
+                dt.format("%Y-%m-%d %H:%M"),
+                candle.open, candle.high, candle.low, candle.close
+            ))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     rsx! {
         div {
             style: "position: relative;",
@@ -568,6 +592,31 @@ fn CandlestickChart(props: CandlestickChartProps) -> Element {
                     height - padding_top - padding_bottom,
                     svg_elements
                 )
+            }
+
+            // Transparent overlay for mouse events
+            div {
+                style: format!(
+                    "position: absolute; left: {}px; top: {}px; width: {}px; height: {}px; cursor: crosshair;",
+                    padding_left, padding_top, chart_width, height - padding_top - padding_bottom
+                ),
+                onmousemove: move |evt| {
+                    let rect_x = evt.data.element_coordinates().x;
+                    let candle_idx = (rect_x / (chart_width_clone / candles_len as f64)).floor() as usize;
+                    if candle_idx < candles_len {
+                        hover_candle_idx.set(Some(candle_idx));
+                    }
+                },
+                onmouseleave: move |_| {
+                    hover_candle_idx.set(None);
+                }
+            }
+
+            // Tooltip
+            if let Some(html) = tooltip_html {
+                div {
+                    dangerous_inner_html: html
+                }
             }
         }
     }

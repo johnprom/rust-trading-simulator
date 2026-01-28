@@ -125,9 +125,15 @@
 - [ ] Update x-axis to show real time instead of "minutes ago"
 
 **Interactive Chart Features**
-- [ ] Visually appealing charts with hover tooltip with crosshair for precise values
-- [ ] Multiple timeframe selection (1h, 8h, 24h)
-- [ ] Candlestick charts with real 1-minute candle data
+- ✅ Visually appealing charts with hover tooltip with crosshair for precise values
+- ✅ Multiple timeframe selection (1h, 8h, 24h)
+- ✅ Candlestick charts with toggleable view
+  - ✅ Backend OHLC data model (Candle struct)
+  - ✅ Dual-window architecture (1m candles for 1h, 5m candles for 8h/24h)
+  - ✅ API endpoint `/api/price/candles` with timeframe support
+  - ✅ Frontend candlestick component with SVG rendering
+  - ✅ Toggle button between line and candlestick views
+  - ✅ Hover tooltip showing OHLC data
 
 **Advanced Chart Enhancements**
 - [ ] Technical indicators (MA, RSI, MACD)
