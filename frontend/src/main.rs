@@ -73,6 +73,12 @@ struct CandlestickChartProps {
     indicator_data: Option<IndicatorResponse>,
 }
 
+#[derive(Clone, PartialEq, Props)]
+struct RSIPanelProps {
+    timestamps: Vec<i64>,
+    rsi_values: Vec<Option<f64>>,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 struct PriceHistoryResponse {
     asset: String,
@@ -761,6 +767,105 @@ fn CandlestickChart(props: CandlestickChartProps) -> Element {
     }
 }
 
+#[component]
+fn RSIPanel(props: RSIPanelProps) -> Element {
+    if props.rsi_values.is_empty() {
+        return rsx! { p { "No RSI data available" } };
+    }
+
+    let width = 1000.0;
+    let height = 120.0;
+    let padding_left = 60.0;
+    let padding_right = 20.0;
+    let padding_top = 10.0;
+    let padding_bottom = 30.0;
+
+    // RSI range is 0-100
+    let min_rsi = 0.0;
+    let max_rsi = 100.0;
+    let rsi_range = max_rsi - min_rsi;
+
+    let mut svg_elements = String::new();
+
+    // Draw reference lines at 30 and 70
+    // Line at 70 (overbought)
+    let y_70 = height - padding_bottom - ((70.0 - min_rsi) / rsi_range) * (height - padding_top - padding_bottom);
+    svg_elements.push_str(&format!(
+        "<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"#ef5350\" stroke-width=\"1\" stroke-dasharray=\"4,2\" opacity=\"0.6\"/>",
+        padding_left, y_70, width - padding_right, y_70
+    ));
+    svg_elements.push_str(&format!(
+        "<text x=\"{}\" y=\"{}\" fill=\"#ef5350\" font-size=\"10\" text-anchor=\"end\">70</text>",
+        padding_left - 5.0, y_70 + 4.0
+    ));
+
+    // Line at 30 (oversold)
+    let y_30 = height - padding_bottom - ((30.0 - min_rsi) / rsi_range) * (height - padding_top - padding_bottom);
+    svg_elements.push_str(&format!(
+        "<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"#66BB6A\" stroke-width=\"1\" stroke-dasharray=\"4,2\" opacity=\"0.6\"/>",
+        padding_left, y_30, width - padding_right, y_30
+    ));
+    svg_elements.push_str(&format!(
+        "<text x=\"{}\" y=\"{}\" fill=\"#66BB6A\" font-size=\"10\" text-anchor=\"end\">30</text>",
+        padding_left - 5.0, y_30 + 4.0
+    ));
+
+    // Draw Y-axis labels
+    for &val in &[0.0, 50.0, 100.0] {
+        let y = height - padding_bottom - ((val - min_rsi) / rsi_range) * (height - padding_top - padding_bottom);
+        svg_elements.push_str(&format!(
+            "<text x=\"{}\" y=\"{}\" fill=\"#666\" font-size=\"10\" text-anchor=\"end\">{}</text>",
+            padding_left - 5.0, y + 4.0, val as i32
+        ));
+        svg_elements.push_str(&format!(
+            "<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"#ddd\" stroke-width=\"1\"/>",
+            padding_left, y, width - padding_right, y
+        ));
+    }
+
+    // Draw RSI line
+    let mut rsi_path = String::from("M ");
+    let mut first_valid = true;
+    for (i, value_opt) in props.rsi_values.iter().enumerate() {
+        if let Some(value) = value_opt {
+            let x = padding_left + (i as f64 / (props.rsi_values.len() - 1) as f64) * (width - padding_left - padding_right);
+            let y = height - padding_bottom - ((value - min_rsi) / rsi_range) * (height - padding_top - padding_bottom);
+            if first_valid {
+                rsi_path.push_str(&format!("{} {} ", x, y));
+                first_valid = false;
+            } else {
+                rsi_path.push_str(&format!("L {} {} ", x, y));
+            }
+        }
+    }
+    svg_elements.push_str(&format!(
+        "<path d=\"{}\" fill=\"none\" stroke=\"#9C27B0\" stroke-width=\"2\"/>",
+        rsi_path
+    ));
+
+    // Y-axis label
+    svg_elements.push_str(&format!(
+        "<text x=\"{}\" y=\"{}\" fill=\"#666\" font-size=\"12\" text-anchor=\"middle\" font-weight=\"bold\">RSI(14)</text>",
+        padding_left / 2.0, height / 2.0
+    ));
+
+    rsx! {
+        div {
+            style: "margin-top: 20px;",
+            div {
+                dangerous_inner_html: format!(
+                    "<svg width=\"{}\" height=\"{}\" viewBox=\"0 0 {} {}\" style=\"display: block; margin: 0 auto; background: white;\"><rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"#fafafa\"/>{}</svg>",
+                    width, height, width, height,
+                    padding_left, padding_top,
+                    width - padding_left - padding_right,
+                    height - padding_top - padding_bottom,
+                    svg_elements
+                )
+            }
+        }
+    }
+}
+
 fn App() -> Element {
     let mut current_view = use_signal(|| AppView::Auth);
     let mut user_id = use_signal(|| String::new());
@@ -799,6 +904,7 @@ fn App() -> Element {
     let mut show_sma_50 = use_signal(|| false);
     let mut show_ema_12 = use_signal(|| false);
     let mut show_ema_26 = use_signal(|| false);
+    let mut show_rsi_14 = use_signal(|| false);
 
     // Fetch BTC price on mount and every 5 seconds
     use_effect(move || {
@@ -934,6 +1040,9 @@ fn App() -> Element {
         if show_ema_26() {
             indicators.push("ema_26");
         }
+        if show_rsi_14() {
+            indicators.push("rsi_14");
+        }
 
         // If no indicators selected, clear data
         if indicators.is_empty() {
@@ -1029,12 +1138,13 @@ fn App() -> Element {
 
     // Fetch indicators when toggles or timeframe changes
     use_effect(move || {
-        let (_tf, _sma20, _sma50, _ema12, _ema26) = (
+        let (_tf, _sma20, _sma50, _ema12, _ema26, _rsi14) = (
             selected_timeframe(),
             show_sma_20(),
             show_sma_50(),
             show_ema_12(),
-            show_ema_26()
+            show_ema_26(),
+            show_rsi_14()
         );
 
         if let AppView::Trading(asset) = &*current_view.peek() {
@@ -2130,6 +2240,18 @@ fn App() -> Element {
                                     }
                                 }
 
+                                // RSI Panel (only for 1h view and when RSI is enabled)
+                                if selected_timeframe() == "1h" && show_rsi_14() {
+                                    if let Some(ref ind_data) = indicator_data() {
+                                        if let Some(rsi_values) = ind_data.indicators.get("rsi_14") {
+                                            RSIPanel {
+                                                timestamps: ind_data.timestamps.clone(),
+                                                rsi_values: rsi_values.clone()
+                                            }
+                                        }
+                                    }
+                                }
+
                                 // Indicator toggles (only for 1h view) - Below chart
                                 if selected_timeframe() == "1h" {
                                     div { style: "display: flex; gap: 10px; align-items: center; margin-top: 15px; padding: 10px; background: #f9f9f9; border-radius: 4px;",
@@ -2165,6 +2287,14 @@ fn App() -> Element {
                                                 onchange: move |_| show_ema_26.set(!show_ema_26())
                                             }
                                             "EMA(26)"
+                                        }
+                                        label { style: "display: flex; align-items: center; gap: 5px; cursor: pointer; font-size: 13px;",
+                                            input {
+                                                r#type: "checkbox",
+                                                checked: show_rsi_14(),
+                                                onchange: move |_| show_rsi_14.set(!show_rsi_14())
+                                            }
+                                            "RSI(14)"
                                         }
                                     }
                                 }

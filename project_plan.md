@@ -136,10 +136,23 @@
   - ✅ Hover tooltip showing OHLC data
 
 **Advanced Chart Enhancements**
-- [ ] Technical indicators (SMA_20, SMA_50) - feature only enabled for 1h (5-second) window
-- [ ] Technical indicators (EMA_12, EMA_26) - feature only enabled for 1h (5-second) window
-- [ ] Technical indicators (RSI_14) and Panel - feature only enabled for 1h (5-second) window
-- [ ] (lower priority) Technical indicators (MACD) - feature only enabled for 1h (5-second) window
+- ✅ Technical indicators (SMA_20, SMA_50) - feature only enabled for 1h (5-second) window
+  - ✅ Backend SMA calculation with unit tests
+  - ✅ API endpoint `/api/indicators` with SMA support
+  - ✅ Frontend toggles and overlay rendering
+  - ✅ Orange (SMA20) and Purple (SMA50) color scheme
+- ✅ Technical indicators (EMA_12, EMA_26) - feature only enabled for 1h (5-second) window
+  - ✅ Backend EMA calculation with unit tests
+  - ✅ API endpoint extended for EMA
+  - ✅ Frontend toggles and overlay rendering
+  - ✅ Teal (EMA12) and Deep Orange (EMA26) color scheme
+- ✅ Technical indicators (RSI_14) and Panel - feature only enabled for 1h (5-second) window
+  - ✅ Backend RSI calculation with unit tests (Wilder's smoothing method)
+  - ✅ API endpoint extended for RSI
+  - ✅ Frontend RSI checkbox toggle
+  - ✅ Separate RSI panel below main chart (120px height)
+  - ✅ 0-100 scale with reference lines at 30 (oversold) and 70 (overbought)
+  - ✅ Purple (#9C27B0) color scheme for RSI line
 
 **Frontend Improvements**
 - [ ] Landing page
@@ -162,6 +175,7 @@
 ## Phase 6 nice to haves and future improvements
 
 **Additional Features**
+- [ ] (lower priority) Technical indicators (MACD) - feature only enabled for 1h (5-second) window
 - [ ] Additional trading pairs (SOL, DOGE, etc.)
 - [ ] Export trade history (CSV, JSON)
 - [ ] Advanced portfolio analytics (P&L, Sharpe ratio)

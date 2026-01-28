@@ -1,7 +1,7 @@
 use axum::{extract::{Query, State}, http::StatusCode, Json};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::{indicators::{SMA, EMA}, state::AppState};
+use crate::{indicators::{SMA, EMA, RSI}, state::AppState};
 
 #[derive(Deserialize)]
 pub struct IndicatorQuery {
@@ -111,6 +111,10 @@ pub async fn get_indicators(
             "ema" => {
                 let ema = EMA::new(period);
                 ema.calculate(&prices)
+            }
+            "rsi" => {
+                let rsi = RSI::new(period);
+                rsi.calculate(&prices)
             }
             _ => continue, // Skip unknown indicator types
         };
