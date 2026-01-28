@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use chrono::{self, Timelike};
 
 #[derive(Clone, Debug, PartialEq)]
 enum AppView {
@@ -41,8 +42,15 @@ struct LoginRequest {
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 struct PricePoint {
-    timestamp: i64,
+    timestamp: i64, // Unix timestamp in seconds
     price: f64,
+}
+
+#[derive(Clone, PartialEq, Props)]
+struct PriceChartProps {
+    prices: Vec<PricePoint>,
+    quote_asset: String,
+    timeframe: String, // "1h", "8h", or "24h"
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -174,10 +182,20 @@ fn format_timestamp(timestamp: &str) -> String {
 }
 
 #[component]
-fn PriceChart(prices: Vec<PricePoint>) -> Element {
+fn PriceChart(props: PriceChartProps) -> Element {
+    // Clone props data to satisfy lifetime requirements for event handlers
+    let prices = props.prices.clone();
+    let quote_asset = props.quote_asset.clone();
+
     if prices.is_empty() {
         return rsx! { p { "No data available" } };
     }
+
+    // Hover state for crosshair and tooltip
+    let mut hover_x = use_signal(|| None::<f64>);
+    let mut hover_y = use_signal(|| None::<f64>);
+    let mut hover_price = use_signal(|| None::<f64>);
+    let mut hover_time = use_signal(|| None::<i64>);
 
     // Calculate chart dimensions
     let width = 1000.0;
@@ -191,10 +209,6 @@ fn PriceChart(prices: Vec<PricePoint>) -> Element {
     let min_price = prices.iter().map(|p| p.price).fold(f64::INFINITY, f64::min);
     let max_price = prices.iter().map(|p| p.price).fold(f64::NEG_INFINITY, f64::max);
     let price_range = if (max_price - min_price).abs() < 0.01 { 1.0 } else { max_price - min_price };
-
-    // Time range (unused, but kept for potential future use)
-    let _min_time = prices.first().map(|p| p.timestamp).unwrap_or(0);
-    let _max_time = prices.last().map(|p| p.timestamp).unwrap_or(0);
 
     // Generate path data for the line
     let mut path_data = String::from("M ");
@@ -216,12 +230,13 @@ fn PriceChart(prices: Vec<PricePoint>) -> Element {
         h_grid_lines.push((y, price));
     }
 
-    // Generate vertical grid lines and time labels (6 marks for 0, 12, 24, 36, 48, 60 minutes ago)
+    // Generate vertical grid lines and time labels (6 marks with real timestamps)
     let mut v_grid_lines = Vec::new();
+    let time_span = prices.last().unwrap().timestamp - prices.first().unwrap().timestamp;
     for i in 0..6 {
         let x = padding_left + (i as f64 / 5.0) * (width - padding_left - padding_right);
-        let minutes_ago = 60 - (i * 12);
-        v_grid_lines.push((x, minutes_ago));
+        let timestamp = prices.first().unwrap().timestamp + ((time_span as f64 * i as f64 / 5.0) as i64);
+        v_grid_lines.push((x, timestamp));
     }
 
     // Precompute fixed coordinates
@@ -230,89 +245,192 @@ fn PriceChart(prices: Vec<PricePoint>) -> Element {
     let chart_left = padding_left;
     let chart_right = width - padding_right;
 
+    // Price label (show currency symbol for USD, otherwise show asset name)
+    let price_label = if quote_asset == "USD" {
+        "Price ($)".to_string()
+    } else {
+        format!("Price ({})", quote_asset)
+    };
+
     rsx! {
-        svg {
-            width: "{width}",
-            height: "{height}",
-            view_box: "0 0 {width} {height}",
-            style: "display: block; margin: 0 auto; background: white;",
+        div {
+            style: "position: relative;",
+            svg {
+                width: "{width}",
+                height: "{height}",
+                view_box: "0 0 {width} {height}",
+                style: "display: block; margin: 0 auto; background: white; cursor: crosshair;",
+                onmousemove: move |evt| {
+                    let rect_x = evt.data().element_coordinates().x;
+                    let rect_y = evt.data().element_coordinates().y;
 
-            // Horizontal grid lines with price labels
-            for (y, price) in h_grid_lines.iter() {
-                line {
-                    x1: "{chart_left}",
-                    y1: "{y}",
-                    x2: "{chart_right}",
-                    y2: "{y}",
-                    stroke: "#e0e0e0",
-                    stroke_width: "1"
-                }
-                text {
-                    x: "{chart_left - 10.0}",
-                    y: "{y + 4.0}",
-                    font_size: "12",
-                    fill: "#666",
-                    text_anchor: "end",
-                    "${price:.2}"
-                }
-            }
+                    // Check if within chart bounds
+                    if rect_x >= chart_left && rect_x <= chart_right && rect_y >= chart_top && rect_y <= chart_bottom {
+                        hover_x.set(Some(rect_x));
+                        hover_y.set(Some(rect_y));
 
-            // Vertical grid lines with time labels
-            for (x, minutes) in v_grid_lines.iter() {
-                line {
-                    x1: "{x}",
-                    y1: "{chart_top}",
-                    x2: "{x}",
-                    y2: "{chart_bottom}",
-                    stroke: "#e0e0e0",
-                    stroke_width: "1"
+                        // Calculate price from y position
+                        let price = max_price - ((rect_y - chart_top) / (chart_bottom - chart_top)) * price_range;
+                        hover_price.set(Some(price));
+
+                        // Calculate time from x position
+                        let time_idx = ((rect_x - chart_left) / (chart_right - chart_left) * (prices.len() - 1) as f64) as usize;
+                        if time_idx < prices.len() {
+                            hover_time.set(Some(prices[time_idx].timestamp));
+                        }
+                    } else {
+                        hover_x.set(None);
+                        hover_y.set(None);
+                        hover_price.set(None);
+                        hover_time.set(None);
+                    }
+                },
+                onmouseleave: move |_| {
+                    hover_x.set(None);
+                    hover_y.set(None);
+                    hover_price.set(None);
+                    hover_time.set(None);
+                },
+
+                // Horizontal grid lines with price labels
+                for (y, price) in h_grid_lines.iter() {
+                    line {
+                        x1: "{chart_left}",
+                        y1: "{y}",
+                        x2: "{chart_right}",
+                        y2: "{y}",
+                        stroke: "#e0e0e0",
+                        stroke_width: "1"
+                    }
+                    text {
+                        x: "{chart_left - 10.0}",
+                        y: "{y + 4.0}",
+                        font_size: "12",
+                        fill: "#666",
+                        text_anchor: "end",
+                        {
+                            if quote_asset == "USD" {
+                                format!("${:.2}", price)
+                            } else {
+                                format!("{:.4}", price)
+                            }
+                        }
+                    }
                 }
+
+                // Vertical grid lines with time labels
+                for (x, timestamp) in v_grid_lines.iter() {
+                    line {
+                        x1: "{x}",
+                        y1: "{chart_top}",
+                        x2: "{x}",
+                        y2: "{chart_bottom}",
+                        stroke: "#e0e0e0",
+                        stroke_width: "1"
+                    }
+                    text {
+                        x: "{x}",
+                        y: "{chart_bottom + 20.0}",
+                        font_size: "12",
+                        fill: "#666",
+                        text_anchor: "middle",
+                        {
+                            // Format timestamp as HH:MM
+                            let dt = chrono::DateTime::from_timestamp(*timestamp, 0).unwrap();
+                            format!("{:02}:{:02}", dt.hour(), dt.minute())
+                        }
+                    }
+                }
+
+                // Chart border
+                rect {
+                    x: "{chart_left}",
+                    y: "{chart_top}",
+                    width: "{chart_right - chart_left}",
+                    height: "{chart_bottom - chart_top}",
+                    fill: "none",
+                    stroke: "#999",
+                    stroke_width: "2"
+                }
+
+                // Price line
+                path {
+                    d: "{path_data}",
+                    fill: "none",
+                    stroke: "#2196F3",
+                    stroke_width: "2",
+                }
+
+                // Crosshair lines
+                if let Some(x) = hover_x() {
+                    line {
+                        x1: "{x}",
+                        y1: "{chart_top}",
+                        x2: "{x}",
+                        y2: "{chart_bottom}",
+                        stroke: "#666",
+                        stroke_width: "1",
+                        stroke_dasharray: "4,4",
+                        pointer_events: "none"
+                    }
+                }
+                if let Some(y) = hover_y() {
+                    line {
+                        x1: "{chart_left}",
+                        y1: "{y}",
+                        x2: "{chart_right}",
+                        y2: "{y}",
+                        stroke: "#666",
+                        stroke_width: "1",
+                        stroke_dasharray: "4,4",
+                        pointer_events: "none"
+                    }
+                }
+
+                // Axis labels
                 text {
-                    x: "{x}",
-                    y: "{chart_bottom + 20.0}",
-                    font_size: "12",
-                    fill: "#666",
+                    x: "{chart_left - 60.0}",
+                    y: "{(chart_top + chart_bottom) / 2.0}",
+                    font_size: "14",
+                    fill: "#333",
                     text_anchor: "middle",
-                    "{minutes}m"
+                    transform: "rotate(-90 {chart_left - 60.0} {(chart_top + chart_bottom) / 2.0})",
+                    "{price_label}"
+                }
+                text {
+                    x: "{(chart_left + chart_right) / 2.0}",
+                    y: "{height - 10.0}",
+                    font_size: "14",
+                    fill: "#333",
+                    text_anchor: "middle",
+                    "Time"
                 }
             }
 
-            // Chart border
-            rect {
-                x: "{chart_left}",
-                y: "{chart_top}",
-                width: "{chart_right - chart_left}",
-                height: "{chart_bottom - chart_top}",
-                fill: "none",
-                stroke: "#999",
-                stroke_width: "2"
-            }
-
-            // Price line
-            path {
-                d: "{path_data}",
-                fill: "none",
-                stroke: "#2196F3",
-                stroke_width: "2",
-            }
-
-            // Axis labels
-            text {
-                x: "{chart_left - 60.0}",
-                y: "{(chart_top + chart_bottom) / 2.0}",
-                font_size: "14",
-                fill: "#333",
-                text_anchor: "middle",
-                transform: "rotate(-90 {chart_left - 60.0} {(chart_top + chart_bottom) / 2.0})",
-                "Price (USD)"
-            }
-            text {
-                x: "{(chart_left + chart_right) / 2.0}",
-                y: "{height - 10.0}",
-                font_size: "14",
-                fill: "#333",
-                text_anchor: "middle",
-                "Time (minutes ago)"
+            // Tooltip
+            if let Some(price) = hover_price() {
+                if let Some(time) = hover_time() {
+                    if let (Some(x), Some(y)) = (hover_x(), hover_y()) {
+                        div {
+                            style: "position: absolute; left: {x + 10.0}px; top: {y - 40.0}px; background: rgba(0,0,0,0.8); color: white; padding: 8px 12px; border-radius: 4px; font-size: 12px; pointer-events: none; white-space: nowrap;",
+                            div {
+                                {
+                                    let dt = chrono::DateTime::from_timestamp(time, 0).unwrap();
+                                    format!("{:02}:{:02}:{:02}", dt.hour(), dt.minute(), dt.second())
+                                }
+                            }
+                            div {
+                                {
+                                    if quote_asset == "USD" {
+                                        format!("${:.2}", price)
+                                    } else {
+                                        format!("{:.4} {}", price, quote_asset)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -345,6 +463,9 @@ fn App() -> Element {
     let mut bot_stoploss = use_signal(|| String::from("1000"));
     let mut selected_bot = use_signal(|| String::from("naive_momentum"));
 
+    // Chart state
+    let mut selected_timeframe = use_signal(|| String::from("1h"));
+
     // Fetch BTC price on mount and every 5 seconds
     use_effect(move || {
         spawn(async move {
@@ -373,30 +494,66 @@ fn App() -> Element {
         });
     });
 
-    // Fetch BTC price history on mount and every 30 seconds
+    // Fetch BTC price history when timeframe changes
+    let fetch_btc_history = move || {
+        let timeframe = selected_timeframe();
+        web_sys::console::log_1(&format!("Fetching BTC history with timeframe: {}", timeframe).into());
+        spawn(async move {
+            let url = format!("{}/price/history?asset=BTC&timeframe={}", API_BASE, timeframe);
+            web_sys::console::log_1(&format!("BTC URL: {}", url).into());
+            if let Ok(resp) = reqwest::get(&url).await {
+                if let Ok(data) = resp.json::<PriceHistoryResponse>().await {
+                    web_sys::console::log_1(&format!("BTC history received: {} points", data.prices.len()).into());
+                    btc_history.set(data.prices);
+                }
+            }
+        });
+    };
+
+    // Re-fetch BTC history when timeframe changes
+    use_effect(move || {
+        selected_timeframe();  // Track dependency
+        fetch_btc_history();
+    });
+
+    // Periodic BTC history refresh (every 30 seconds)
     use_effect(move || {
         spawn(async move {
             loop {
-                if let Ok(resp) = reqwest::get(format!("{}/price/history?asset=BTC", API_BASE)).await {
-                    if let Ok(data) = resp.json::<PriceHistoryResponse>().await {
-                        btc_history.set(data.prices);
-                    }
-                }
                 gloo_timers::future::TimeoutFuture::new(30_000).await;
+                fetch_btc_history();
             }
         });
     });
 
-    // Fetch ETH price history on mount and every 30 seconds
+    // Fetch ETH price history when timeframe changes
+    let fetch_eth_history = move || {
+        let timeframe = selected_timeframe();
+        web_sys::console::log_1(&format!("Fetching ETH history with timeframe: {}", timeframe).into());
+        spawn(async move {
+            let url = format!("{}/price/history?asset=ETH&timeframe={}", API_BASE, timeframe);
+            web_sys::console::log_1(&format!("ETH URL: {}", url).into());
+            if let Ok(resp) = reqwest::get(&url).await {
+                if let Ok(data) = resp.json::<PriceHistoryResponse>().await {
+                    web_sys::console::log_1(&format!("ETH history received: {} points", data.prices.len()).into());
+                    eth_history.set(data.prices);
+                }
+            }
+        });
+    };
+
+    // Re-fetch ETH history when timeframe changes
+    use_effect(move || {
+        selected_timeframe();  // Track dependency
+        fetch_eth_history();
+    });
+
+    // Periodic ETH history refresh (every 30 seconds)
     use_effect(move || {
         spawn(async move {
             loop {
-                if let Ok(resp) = reqwest::get(format!("{}/price/history?asset=ETH", API_BASE)).await {
-                    if let Ok(data) = resp.json::<PriceHistoryResponse>().await {
-                        eth_history.set(data.prices);
-                    }
-                }
                 gloo_timers::future::TimeoutFuture::new(30_000).await;
+                fetch_eth_history();
             }
         });
     });
@@ -1351,14 +1508,14 @@ fn App() -> Element {
                                 }
                                 div { style: "display: flex; gap: 10px;",
                                     button {
+                                        onclick: move |_| current_view.set(AppView::Markets),
+                                        style: "padding: 10px 20px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;",
+                                        "← Markets"
+                                    }
+                                    button {
                                         onclick: move |_| current_view.set(AppView::Dashboard),
                                         style: "padding: 10px 20px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;",
                                         "Dashboard"
-                                    }
-                                    button {
-                                        disabled: true,
-                                        style: "padding: 10px 20px; background: #ccc; color: #666; border: none; border-radius: 4px; cursor: default; font-size: 14px; font-weight: bold;",
-                                        "Markets"
                                     }
                                     button {
                                         onclick: move |_| handle_logout(),
@@ -1380,12 +1537,47 @@ fn App() -> Element {
                                 }
                             }
 
-                            // Price Chart (shows base asset USD price history)
+                            // Price Chart (shows base asset price history)
                             div { class: "price-chart",
                                 style: "background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #ddd;",
-                                h2 { "{base_asset} Price History (Last Hour)" }
+                                div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;",
+                                    h2 { style: "margin: 0;", "{base_asset} Price History" }
+                                    div { style: "display: flex; gap: 8px;",
+                                        button {
+                                            onclick: move |_| selected_timeframe.set("1h".to_string()),
+                                            style: if selected_timeframe() == "1h" {
+                                                "padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;"
+                                            } else {
+                                                "padding: 8px 16px; background: #f5f5f5; color: #333; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; font-size: 13px;"
+                                            },
+                                            "1H"
+                                        }
+                                        button {
+                                            onclick: move |_| selected_timeframe.set("8h".to_string()),
+                                            style: if selected_timeframe() == "8h" {
+                                                "padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;"
+                                            } else {
+                                                "padding: 8px 16px; background: #f5f5f5; color: #333; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; font-size: 13px;"
+                                            },
+                                            "8H"
+                                        }
+                                        button {
+                                            onclick: move |_| selected_timeframe.set("24h".to_string()),
+                                            style: if selected_timeframe() == "24h" {
+                                                "padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;"
+                                            } else {
+                                                "padding: 8px 16px; background: #f5f5f5; color: #333; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; font-size: 13px;"
+                                            },
+                                            "24H"
+                                        }
+                                    }
+                                }
                                 if !current_history.is_empty() {
-                                    PriceChart { prices: current_history }
+                                    PriceChart {
+                                        prices: current_history,
+                                        quote_asset: quote_asset.to_string(),
+                                        timeframe: selected_timeframe()
+                                    }
                                 } else {
                                     p { style: "color: #666;", "Loading price data..." }
                                 }

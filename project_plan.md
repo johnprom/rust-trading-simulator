@@ -13,11 +13,11 @@
 | 3 | Bot execution & lifecycle | ✅ Complete |
 | 3 | Bot UI & API | ✅ Complete |
 | 3 | Naive Momentum Bot strategy | ✅ Complete |
-| 4 | Interactive charts | Pending |
-| 4 | Real-time features (WebSockets) | Pending |
+| 4 | Chart fixes & enhancements | Pending |
 | 4 | UX improvements | Pending |
 | 4 | Additional bot strategies | Pending |
-| 4 | Advanced features | Pending |
+| 5 | Real-time features (WebSockets) | Pending |
+| 5 | Advanced features | Pending |
 
 ---
 
@@ -117,27 +117,42 @@
 
 ---
 
-## Phase 4 – Advanced Features (NEXT)
+## Phase 4 – Chart Enhancements & UX (NEXT)
 
-**Chart Enhancements**
-- [ ] Interactive charts with zoom/pan
-- [ ] Multiple timeframe selection (1h, 24h, 7d)
-- [ ] Candlestick charts
+**Current Chart Fixes**
+- [ ] Fix y-axis formatting for cross-pairs (e.g., BTC/ETH should show ETH not $)
+- [ ] Add back button from Trading view to Markets tab
+- [ ] Update x-axis to show real time instead of "minutes ago"
+
+**Interactive Chart Features**
+- [ ] Visually appealing charts with hover tooltip with crosshair for precise values
+- [ ] Multiple timeframe selection (1h, 8h, 24h)
+- [ ] Candlestick charts with real 1-minute candle data
+
+**Advanced Chart Enhancements**
 - [ ] Technical indicators (MA, RSI, MACD)
-
-**Real-time Features**
-- [ ] WebSocket support for live updates
-- [ ] Live price streaming
-- [ ] Real-time bot status updates
 
 **Frontend Improvements**
 - [ ] Landing page
 - [ ] Enhanced dashboard design
 - [ ] Improved styling and responsive design
 
-**Additional Features**
+---
+
+## Phase 5 – Real-time Features & Advanced Features
+
+**Real-time Features**
+- [ ] WebSocket support for live updates
+- [ ] Live price streaming
+- [ ] Real-time bot status updates
+
+**Bot Strategies**
 - [ ] Additional bot strategies (MA crossover, RSI-based, etc.)
 - [ ] Bot performance metrics and comparison
+
+## Phase 6 nice to haves and future improvements
+
+**Additional Features**
 - [ ] Additional trading pairs (SOL, DOGE, etc.)
 - [ ] Export trade history (CSV, JSON)
 - [ ] Advanced portfolio analytics (P&L, Sharpe ratio)

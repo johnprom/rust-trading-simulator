@@ -5,7 +5,8 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 
-const PRICE_WINDOW_SIZE: usize = 17280; // 24h * 60min * 12 (5s intervals)
+const PRICE_WINDOW_SIZE: usize = 17280; // 24h * 60min * 12 (5s intervals) - high frequency
+const CANDLE_WINDOW_SIZE: usize = 288;  // 24h * 12 (5min intervals) - low frequency
 
 #[derive(Clone)]
 pub struct AppState {
@@ -24,7 +25,8 @@ pub struct BotInstance {
 
 pub struct AppStateInner {
     pub users: HashMap<UserId, UserData>,
-    pub price_window: Vec<PricePoint>,
+    pub price_window: Vec<PricePoint>,     // High-frequency: 5-second data (last 1-2 hours of real data)
+    pub candle_window: Vec<PricePoint>,    // Low-frequency: 5-minute candles (24 hours of historical data)
     pub active_bots: HashMap<UserId, BotInstance>, // One bot per user maximum
 }
 
@@ -53,6 +55,7 @@ impl AppState {
             inner: Arc::new(RwLock::new(AppStateInner {
                 users,
                 price_window: Vec::with_capacity(PRICE_WINDOW_SIZE),
+                candle_window: Vec::with_capacity(CANDLE_WINDOW_SIZE),
                 active_bots: HashMap::new(),
             })),
             db,
@@ -99,6 +102,37 @@ impl AppState {
     pub async fn get_price_window(&self, asset: &str, limit: usize) -> Vec<PricePoint> {
         let state = self.inner.read().await;
         state.price_window
+            .iter()
+            .filter(|p| p.asset == asset)
+            .rev()
+            .take(limit)
+            .cloned()
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect()
+    }
+
+    /// Add a 5-minute candle to the candle window (for longer-term data)
+    pub async fn add_candle(&self, point: PricePoint) {
+        let mut state = self.inner.write().await;
+        let asset = point.asset.clone();
+        state.candle_window.push(point);
+
+        // Maintain sliding window per asset (24h of 5-minute candles = 288 points per asset)
+        let asset_count = state.candle_window.iter().filter(|p| p.asset == asset).count();
+        if asset_count > CANDLE_WINDOW_SIZE {
+            // Find and remove the oldest candle for this specific asset
+            if let Some(index) = state.candle_window.iter().position(|p| p.asset == asset) {
+                state.candle_window.remove(index);
+            }
+        }
+    }
+
+    /// Get 5-minute candles for a specific asset
+    pub async fn get_candle_window(&self, asset: &str, limit: usize) -> Vec<PricePoint> {
+        let state = self.inner.read().await;
+        state.candle_window
             .iter()
             .filter(|p| p.asset == asset)
             .rev()
