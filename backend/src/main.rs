@@ -74,6 +74,7 @@ async fn main() {
     let api_routes = Router::new()
         .route("/price", get(routes::price::get_price))
         .route("/price/history", get(routes::price::get_price_history))
+        .route("/price/candles", get(routes::price::get_candle_history))
         .route("/portfolio", get(routes::portfolio::get_portfolio))
         .route("/trade", post(routes::trade::post_trade))
         .route("/deposit", post(routes::trade::post_deposit))

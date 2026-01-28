@@ -7,6 +7,8 @@ use tokio::task::JoinHandle;
 
 const PRICE_WINDOW_SIZE: usize = 17280; // 24h * 60min * 12 (5s intervals) - high frequency
 const CANDLE_WINDOW_SIZE: usize = 288;  // 24h * 12 (5min intervals) - low frequency
+const OHLC_CANDLE_1M_SIZE: usize = 60;  // 1 hour of 1-minute candles for 1h view
+const OHLC_CANDLE_5M_SIZE: usize = 288; // 24 hours of 5-minute candles for 8h/24h views
 
 #[derive(Clone)]
 pub struct AppState {
@@ -27,6 +29,8 @@ pub struct AppStateInner {
     pub users: HashMap<UserId, UserData>,
     pub price_window: Vec<PricePoint>,     // High-frequency: 5-second data (last 1-2 hours of real data)
     pub candle_window: Vec<PricePoint>,    // Low-frequency: 5-minute candles (24 hours of historical data)
+    pub ohlc_candles_1m: Vec<Candle>,      // 1-minute OHLC candles for 1h candlestick view
+    pub ohlc_candles_5m: Vec<Candle>,      // 5-minute OHLC candles for 8h/24h candlestick views
     pub active_bots: HashMap<UserId, BotInstance>, // One bot per user maximum
 }
 
@@ -56,6 +60,8 @@ impl AppState {
                 users,
                 price_window: Vec::with_capacity(PRICE_WINDOW_SIZE),
                 candle_window: Vec::with_capacity(CANDLE_WINDOW_SIZE),
+                ohlc_candles_1m: Vec::with_capacity(OHLC_CANDLE_1M_SIZE * 2), // BTC + ETH
+                ohlc_candles_5m: Vec::with_capacity(OHLC_CANDLE_5M_SIZE * 2), // BTC + ETH
                 active_bots: HashMap::new(),
             })),
             db,
@@ -135,6 +141,66 @@ impl AppState {
         state.candle_window
             .iter()
             .filter(|p| p.asset == asset)
+            .rev()
+            .take(limit)
+            .cloned()
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect()
+    }
+
+    /// Add 1-minute OHLC candle (for 1h candlestick view)
+    pub async fn add_ohlc_candle_1m(&self, candle: Candle) {
+        let mut state = self.inner.write().await;
+        let asset = candle.asset.clone();
+        state.ohlc_candles_1m.push(candle);
+
+        // Maintain window per asset (60 candles per asset)
+        let asset_count = state.ohlc_candles_1m.iter().filter(|c| c.asset == asset).count();
+        if asset_count > OHLC_CANDLE_1M_SIZE {
+            if let Some(index) = state.ohlc_candles_1m.iter().position(|c| c.asset == asset) {
+                state.ohlc_candles_1m.remove(index);
+            }
+        }
+    }
+
+    /// Get 1-minute OHLC candles for a specific asset
+    pub async fn get_ohlc_candles_1m(&self, asset: &str, limit: usize) -> Vec<Candle> {
+        let state = self.inner.read().await;
+        state.ohlc_candles_1m
+            .iter()
+            .filter(|c| c.asset == asset)
+            .rev()
+            .take(limit)
+            .cloned()
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect()
+    }
+
+    /// Add 5-minute OHLC candle (for 8h/24h candlestick views)
+    pub async fn add_ohlc_candle_5m(&self, candle: Candle) {
+        let mut state = self.inner.write().await;
+        let asset = candle.asset.clone();
+        state.ohlc_candles_5m.push(candle);
+
+        // Maintain window per asset (288 candles per asset)
+        let asset_count = state.ohlc_candles_5m.iter().filter(|c| c.asset == asset).count();
+        if asset_count > OHLC_CANDLE_5M_SIZE {
+            if let Some(index) = state.ohlc_candles_5m.iter().position(|c| c.asset == asset) {
+                state.ohlc_candles_5m.remove(index);
+            }
+        }
+    }
+
+    /// Get 5-minute OHLC candles for a specific asset
+    pub async fn get_ohlc_candles_5m(&self, asset: &str, limit: usize) -> Vec<Candle> {
+        let state = self.inner.read().await;
+        state.ohlc_candles_5m
+            .iter()
+            .filter(|c| c.asset == asset)
             .rev()
             .take(limit)
             .cloned()

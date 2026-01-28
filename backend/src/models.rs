@@ -12,6 +12,16 @@ pub struct PricePoint {
     pub price: f64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Candle {
+    pub timestamp: DateTime<Utc>,
+    pub asset: String,
+    pub open: f64,
+    pub high: f64,
+    pub low: f64,
+    pub close: f64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TransactionType {
     Trade,

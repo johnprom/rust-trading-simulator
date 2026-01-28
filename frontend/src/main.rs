@@ -46,11 +46,27 @@ struct PricePoint {
     price: f64,
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+struct Candle {
+    timestamp: i64, // Unix timestamp in seconds
+    open: f64,
+    high: f64,
+    low: f64,
+    close: f64,
+}
+
 #[derive(Clone, PartialEq, Props)]
 struct PriceChartProps {
     prices: Vec<PricePoint>,
     quote_asset: String,
     timeframe: String, // "1h", "8h", or "24h"
+}
+
+#[derive(Clone, PartialEq, Props)]
+struct CandlestickChartProps {
+    candles: Vec<Candle>,
+    quote_asset: String,
+    timeframe: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -436,6 +452,127 @@ fn PriceChart(props: PriceChartProps) -> Element {
     }
 }
 
+fn CandlestickChart(props: CandlestickChartProps) -> Element {
+    let candles = props.candles.clone();
+    let quote_asset = props.quote_asset.clone();
+
+    if candles.is_empty() {
+        return rsx! { p { "No candlestick data available" } };
+    }
+
+    // Hover state
+    let mut hover_candle_idx = use_signal(|| None::<usize>);
+
+    let width = 1000.0;
+    let height = 300.0;
+    let padding_left = 80.0;
+    let padding_right = 40.0;
+    let padding_top = 40.0;
+    let padding_bottom = 60.0;
+
+    // Find min/max prices
+    let mut min_price = f64::INFINITY;
+    let mut max_price = f64::NEG_INFINITY;
+    for candle in &candles {
+        min_price = min_price.min(candle.low);
+        max_price = max_price.max(candle.high);
+    }
+    let price_range = if (max_price - min_price).abs() < 0.01 { 1.0 } else { max_price - min_price };
+
+    let chart_width = width - padding_left - padding_right;
+    let candle_spacing = chart_width / candles.len() as f64;
+    let candle_width = (candle_spacing * 0.7).max(2.0);
+
+    let price_label = if quote_asset == "USD" {
+        "Price ($)".to_string()
+    } else {
+        format!("Price ({})", quote_asset)
+    };
+
+    // Build SVG elements as strings
+    let mut svg_elements = String::new();
+
+    // Grid lines and labels
+    for i in 0..5 {
+        let y = padding_top + (i as f64 / 4.0) * (height - padding_top - padding_bottom);
+        let price = max_price - (i as f64 / 4.0) * price_range;
+        svg_elements.push_str(&format!(
+            "<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"#e0e0e0\" stroke-width=\"1\"/>",
+            padding_left, y, width - padding_right, y
+        ));
+        svg_elements.push_str(&format!(
+            "<text x=\"{}\" y=\"{}\" text-anchor=\"end\" font-size=\"12\" fill=\"#666\">{:.2}</text>",
+            padding_left - 10.0, y + 5.0, price
+        ));
+    }
+
+    let time_span = candles.last().unwrap().timestamp - candles.first().unwrap().timestamp;
+    for i in 0..6 {
+        let x = padding_left + (i as f64 / 5.0) * chart_width;
+        let timestamp = candles.first().unwrap().timestamp + ((time_span as f64 * i as f64 / 5.0) as i64);
+        let dt = chrono::DateTime::from_timestamp(timestamp, 0).unwrap();
+        svg_elements.push_str(&format!(
+            "<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"#e0e0e0\" stroke-width=\"1\"/>",
+            x, padding_top, x, height - padding_bottom
+        ));
+        svg_elements.push_str(&format!(
+            "<text x=\"{}\" y=\"{}\" text-anchor=\"middle\" font-size=\"12\" fill=\"#666\">{:02}:{:02}</text>",
+            x, height - padding_bottom + 20.0, dt.hour(), dt.minute()
+        ));
+    }
+
+    // Draw candlesticks
+    for (i, candle) in candles.iter().enumerate() {
+        let x_center = padding_left + (i as f64 + 0.5) * candle_spacing;
+        let open_y = height - padding_bottom - ((candle.open - min_price) / price_range) * (height - padding_top - padding_bottom);
+        let close_y = height - padding_bottom - ((candle.close - min_price) / price_range) * (height - padding_top - padding_bottom);
+        let high_y = height - padding_bottom - ((candle.high - min_price) / price_range) * (height - padding_top - padding_bottom);
+        let low_y = height - padding_bottom - ((candle.low - min_price) / price_range) * (height - padding_top - padding_bottom);
+
+        let is_bullish = candle.close >= candle.open;
+        let color = if is_bullish { "#26a69a" } else { "#ef5350" };
+        let body_height = (open_y - close_y).abs().max(1.0);
+        let body_y = open_y.min(close_y);
+
+        // High-low wick
+        svg_elements.push_str(&format!(
+            "<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"{}\" stroke-width=\"1\"/>",
+            x_center, high_y, x_center, low_y, color
+        ));
+        // Body
+        svg_elements.push_str(&format!(
+            "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"{}\" stroke=\"{}\"/>",
+            x_center - candle_width / 2.0, body_y, candle_width, body_height, color, color
+        ));
+    }
+
+    // Axis labels
+    svg_elements.push_str(&format!(
+        "<text x=\"{}\" y=\"{}\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"bold\" fill=\"#333\" transform=\"rotate(-90 {} {})\">{}</text>",
+        padding_left / 2.0, height / 2.0, padding_left / 2.0, height / 2.0, price_label
+    ));
+    svg_elements.push_str(&format!(
+        "<text x=\"{}\" y=\"{}\" text-anchor=\"middle\" font-size=\"14\" font-weight=\"bold\" fill=\"#333\">Time</text>",
+        width / 2.0, height - 10.0
+    ));
+
+    rsx! {
+        div {
+            style: "position: relative;",
+            div {
+                dangerous_inner_html: format!(
+                    "<svg width=\"{}\" height=\"{}\" viewBox=\"0 0 {} {}\" style=\"display: block; margin: 0 auto; background: white;\"><rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"#fafafa\"/>{}</svg>",
+                    width, height, width, height,
+                    padding_left, padding_top,
+                    width - padding_left - padding_right,
+                    height - padding_top - padding_bottom,
+                    svg_elements
+                )
+            }
+        }
+    }
+}
+
 fn App() -> Element {
     let mut current_view = use_signal(|| AppView::Auth);
     let mut user_id = use_signal(|| String::new());
@@ -465,6 +602,8 @@ fn App() -> Element {
 
     // Chart state
     let mut selected_timeframe = use_signal(|| String::from("1h"));
+    let mut chart_type = use_signal(|| String::from("line")); // "line" or "candlestick"
+    let mut candle_history = use_signal(|| Vec::<Candle>::new());
 
     // Fetch BTC price on mount and every 5 seconds
     use_effect(move || {
@@ -556,6 +695,32 @@ fn App() -> Element {
                 fetch_eth_history();
             }
         });
+    });
+
+    // Fetch candlestick data for the selected market (base/quote)
+    let fetch_candle_history = move |asset: &str| {
+        let timeframe = selected_timeframe();
+        let asset = asset.to_string();
+        spawn(async move {
+            let url = format!("{}/price/candles?asset={}&timeframe={}", API_BASE, asset, timeframe);
+            if let Ok(resp) = reqwest::get(&url).await {
+                #[derive(Deserialize)]
+                struct CandleHistoryResponse {
+                    candles: Vec<Candle>,
+                }
+                if let Ok(data) = resp.json::<CandleHistoryResponse>().await {
+                    candle_history.set(data.candles);
+                }
+            }
+        });
+    };
+
+    // Re-fetch candle data when timeframe changes (only when in candlestick mode)
+    // Note: This will be triggered manually when switching to candlestick mode
+    use_effect(move || {
+        let _current_timeframe = selected_timeframe();
+        // Just track the dependency for timeframe changes
+        // The actual fetch happens in the onclick handler
     });
 
     // Auth handlers
@@ -1542,44 +1707,100 @@ fn App() -> Element {
                                 style: "background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #ddd;",
                                 div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;",
                                     h2 { style: "margin: 0;", "{base_asset} Price History" }
-                                    div { style: "display: flex; gap: 8px;",
-                                        button {
-                                            onclick: move |_| selected_timeframe.set("1h".to_string()),
-                                            style: if selected_timeframe() == "1h" {
-                                                "padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;"
-                                            } else {
-                                                "padding: 8px 16px; background: #f5f5f5; color: #333; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; font-size: 13px;"
-                                            },
-                                            "1H"
+                                    div { style: "display: flex; gap: 15px; align-items: center;",
+                                        // Chart type toggle
+                                        div { style: "display: flex; gap: 4px; border: 1px solid #ddd; border-radius: 4px; overflow: hidden;",
+                                            button {
+                                                onclick: move |_| chart_type.set("line".to_string()),
+                                                style: if chart_type() == "line" {
+                                                    "padding: 6px 12px; background: #2196F3; color: white; border: none; cursor: pointer; font-size: 12px;"
+                                                } else {
+                                                    "padding: 6px 12px; background: white; color: #333; border: none; cursor: pointer; font-size: 12px;"
+                                                },
+                                                "Line"
+                                            }
+                                            button {
+                                                onclick: move |_| {
+                                                    chart_type.set("candlestick".to_string());
+                                                    // Trigger candle fetch
+                                                    fetch_candle_history(&base_asset);
+                                                },
+                                                style: if chart_type() == "candlestick" {
+                                                    "padding: 6px 12px; background: #2196F3; color: white; border: none; cursor: pointer; font-size: 12px;"
+                                                } else {
+                                                    "padding: 6px 12px; background: white; color: #333; border: none; cursor: pointer; font-size: 12px;"
+                                                },
+                                                "Candles"
+                                            }
                                         }
-                                        button {
-                                            onclick: move |_| selected_timeframe.set("8h".to_string()),
-                                            style: if selected_timeframe() == "8h" {
-                                                "padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;"
-                                            } else {
-                                                "padding: 8px 16px; background: #f5f5f5; color: #333; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; font-size: 13px;"
-                                            },
-                                            "8H"
-                                        }
-                                        button {
-                                            onclick: move |_| selected_timeframe.set("24h".to_string()),
-                                            style: if selected_timeframe() == "24h" {
-                                                "padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;"
-                                            } else {
-                                                "padding: 8px 16px; background: #f5f5f5; color: #333; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; font-size: 13px;"
-                                            },
-                                            "24H"
+                                        // Timeframe selection
+                                        div { style: "display: flex; gap: 8px;",
+                                            button {
+                                                onclick: move |_| {
+                                                    selected_timeframe.set("1h".to_string());
+                                                    if chart_type() == "candlestick" {
+                                                        fetch_candle_history(&base_asset);
+                                                    }
+                                                },
+                                                style: if selected_timeframe() == "1h" {
+                                                    "padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;"
+                                                } else {
+                                                    "padding: 8px 16px; background: #f5f5f5; color: #333; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; font-size: 13px;"
+                                                },
+                                                "1H"
+                                            }
+                                            button {
+                                                onclick: move |_| {
+                                                    selected_timeframe.set("8h".to_string());
+                                                    if chart_type() == "candlestick" {
+                                                        fetch_candle_history(&base_asset);
+                                                    }
+                                                },
+                                                style: if selected_timeframe() == "8h" {
+                                                    "padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;"
+                                                } else {
+                                                    "padding: 8px 16px; background: #f5f5f5; color: #333; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; font-size: 13px;"
+                                                },
+                                                "8H"
+                                            }
+                                            button {
+                                                onclick: move |_| {
+                                                    selected_timeframe.set("24h".to_string());
+                                                    if chart_type() == "candlestick" {
+                                                        fetch_candle_history(&base_asset);
+                                                    }
+                                                },
+                                                style: if selected_timeframe() == "24h" {
+                                                    "padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;"
+                                                } else {
+                                                    "padding: 8px 16px; background: #f5f5f5; color: #333; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; font-size: 13px;"
+                                                },
+                                                "24H"
+                                            }
                                         }
                                     }
                                 }
-                                if !current_history.is_empty() {
-                                    PriceChart {
-                                        prices: current_history,
-                                        quote_asset: quote_asset.to_string(),
-                                        timeframe: selected_timeframe()
+                                // Render chart based on chart type
+                                if chart_type() == "candlestick" {
+                                    if !candle_history().is_empty() {
+                                        CandlestickChart {
+                                            candles: candle_history(),
+                                            quote_asset: quote_asset.to_string(),
+                                            timeframe: selected_timeframe()
+                                        }
+                                    } else {
+                                        p { style: "color: #666;", "Loading candlestick data..." }
                                     }
                                 } else {
-                                    p { style: "color: #666;", "Loading price data..." }
+                                    if !current_history.is_empty() {
+                                        PriceChart {
+                                            prices: current_history,
+                                            quote_asset: quote_asset.to_string(),
+                                            timeframe: selected_timeframe()
+                                        }
+                                    } else {
+                                        p { style: "color: #666;", "Loading price data..." }
+                                    }
                                 }
                             }
 

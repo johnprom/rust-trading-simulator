@@ -1,4 +1,4 @@
-use crate::{api_client::ApiClient, models::PricePoint, state::AppState};
+use crate::{api_client::ApiClient, models::{PricePoint, Candle}, state::AppState};
 use chrono::{Duration as ChronoDuration, Utc};
 use std::time::Duration;
 use tokio::time;
@@ -92,6 +92,36 @@ async fn backfill_and_poll_asset(state: AppState, asset: &str) {
                 }
                 info!("Backfilled {} with simulated low-frequency candles", asset);
             }
+        }
+    }
+
+    // STEP 3: Backfill 1 hour of 1-minute OHLC candles (for 1h candlestick view)
+    info!("Backfilling {} 1-minute OHLC candles for last 1 hour...", asset);
+    match api_client.fetch_ohlc_candles(asset, one_hour_ago, now, 60).await {
+        Ok(candles) => {
+            info!("Fetched {} 1-minute OHLC candles for {} from Coinbase", candles.len(), asset);
+            for candle in candles {
+                state.add_ohlc_candle_1m(candle).await;
+            }
+            info!("Backfilled {} 1-minute OHLC candles successfully", asset);
+        }
+        Err(e) => {
+            error!("Failed to fetch {} 1h OHLC candle data: {}", asset, e);
+        }
+    }
+
+    // STEP 4: Backfill 24 hours of 5-minute OHLC candles (for 8h/24h candlestick views)
+    info!("Backfilling {} 5-minute OHLC candles for last 24 hours...", asset);
+    match api_client.fetch_ohlc_candles(asset, twenty_four_hours_ago, now, 300).await {
+        Ok(candles) => {
+            info!("Fetched {} 5-minute OHLC candles for {} from Coinbase", candles.len(), asset);
+            for candle in candles {
+                state.add_ohlc_candle_5m(candle).await;
+            }
+            info!("Backfilled {} 5-minute OHLC candles successfully", asset);
+        }
+        Err(e) => {
+            error!("Failed to fetch {} 24h OHLC candle data: {}", asset, e);
         }
     }
 

@@ -1,4 +1,4 @@
-use crate::models::PricePoint;
+use crate::models::{PricePoint, Candle};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
@@ -190,6 +190,76 @@ impl ApiClient {
         }
 
         result
+    }
+
+    /// Fetch full OHLC candles (not just close price)
+    pub async fn fetch_ohlc_candles(
+        &self,
+        asset: &str,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+        granularity: i64,
+    ) -> Result<Vec<Candle>, ApiError> {
+        let url = format!(
+            "https://api.exchange.coinbase.com/products/{}-USD/candles?start={}&end={}&granularity={}",
+            asset,
+            start.to_rfc3339(),
+            end.to_rfc3339(),
+            granularity
+        );
+
+        let response = self.client
+            .get(&url)
+            .header("User-Agent", "rust-trading-simulator/1.0")
+            .send()
+            .await
+            .map_err(|e| ApiError::RequestFailed(e.to_string()))?;
+
+        let response_text = response
+            .text()
+            .await
+            .map_err(|e| ApiError::ParseError(format!("Failed to get response text: {}", e)))?;
+
+        // Parse JSON array: [[timestamp, low, high, open, close, volume], ...]
+        let candles: Vec<Vec<serde_json::Value>> = serde_json::from_str(&response_text)
+            .map_err(|e| ApiError::ParseError(format!("Failed to parse candles. Response: {}. Error: {}", response_text, e)))?;
+
+        let mut result = Vec::new();
+        for candle in candles {
+            if candle.len() >= 5 {
+                let timestamp = candle[0].as_i64()
+                    .ok_or_else(|| ApiError::ParseError("Invalid timestamp".to_string()))?;
+                let low = candle[1].as_f64()
+                    .or_else(|| candle[1].as_str().and_then(|s| s.parse::<f64>().ok()))
+                    .ok_or_else(|| ApiError::ParseError("Invalid low price".to_string()))?;
+                let high = candle[2].as_f64()
+                    .or_else(|| candle[2].as_str().and_then(|s| s.parse::<f64>().ok()))
+                    .ok_or_else(|| ApiError::ParseError("Invalid high price".to_string()))?;
+                let open = candle[3].as_f64()
+                    .or_else(|| candle[3].as_str().and_then(|s| s.parse::<f64>().ok()))
+                    .ok_or_else(|| ApiError::ParseError("Invalid open price".to_string()))?;
+                let close = candle[4].as_f64()
+                    .or_else(|| candle[4].as_str().and_then(|s| s.parse::<f64>().ok()))
+                    .ok_or_else(|| ApiError::ParseError("Invalid close price".to_string()))?;
+
+                let dt = DateTime::from_timestamp(timestamp, 0)
+                    .ok_or_else(|| ApiError::ParseError("Invalid timestamp conversion".to_string()))?;
+
+                result.push(Candle {
+                    timestamp: dt,
+                    asset: asset.to_string(),
+                    open,
+                    high,
+                    low,
+                    close,
+                });
+            }
+        }
+
+        // Sort by timestamp (ascending)
+        result.sort_by_key(|c| c.timestamp);
+
+        Ok(result)
     }
 }
 
