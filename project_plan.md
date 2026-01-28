@@ -120,9 +120,9 @@
 ## Phase 4 – Chart Enhancements & UX (NEXT)
 
 **Current Chart Fixes**
-- [ ] Fix y-axis formatting for cross-pairs (e.g., BTC/ETH should show ETH not $)
-- [ ] Add back button from Trading view to Markets tab
-- [ ] Update x-axis to show real time instead of "minutes ago"
+- ✅ Fix y-axis formatting for cross-pairs (e.g., BTC/ETH should show ETH not $)
+- ✅ Add back button from Trading view to Markets tab
+- ✅ Update x-axis to show real time instead of "minutes ago"
 
 **Interactive Chart Features**
 - ✅ Visually appealing charts with hover tooltip with crosshair for precise values

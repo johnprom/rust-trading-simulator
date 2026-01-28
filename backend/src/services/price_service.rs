@@ -129,19 +129,100 @@ async fn backfill_and_poll_asset(state: AppState, asset: &str) {
     info!("Starting live {} price polling (5s interval)", asset);
 
     let mut tick_counter = 0u32;
+
+    // OHLC accumulators for 1-minute candles
+    let mut current_1m_open: Option<f64> = None;
+    let mut current_1m_high: f64 = 0.0;
+    let mut current_1m_low: f64 = f64::INFINITY;
+    let mut current_1m_close: f64 = 0.0;
+    let mut current_1m_start: Option<chrono::DateTime<Utc>> = None;
+
+    // OHLC accumulators for 5-minute candles
+    let mut current_5m_open: Option<f64> = None;
+    let mut current_5m_high: f64 = 0.0;
+    let mut current_5m_low: f64 = f64::INFINITY;
+    let mut current_5m_close: f64 = 0.0;
+    let mut current_5m_start: Option<chrono::DateTime<Utc>> = None;
+
     loop {
         interval.tick().await;
         tick_counter += 1;
 
         match api_client.fetch_price(asset, "USD").await {
             Ok(price_point) => {
-                info!("Fetched {} price: ${:.2}", asset, price_point.price);
+                let price = price_point.price;
+                let timestamp = price_point.timestamp;
+
+                info!("Fetched {} price: ${:.2}", asset, price);
                 state.add_price_point(price_point.clone()).await;
 
-                // Every 5 minutes (60 ticks at 5-second intervals), also add to candle window
+                // Update 1-minute OHLC accumulator
+                if current_1m_open.is_none() {
+                    current_1m_open = Some(price);
+                    current_1m_start = Some(timestamp);
+                }
+                current_1m_high = current_1m_high.max(price);
+                current_1m_low = current_1m_low.min(price);
+                current_1m_close = price;
+
+                // Update 5-minute OHLC accumulator
+                if current_5m_open.is_none() {
+                    current_5m_open = Some(price);
+                    current_5m_start = Some(timestamp);
+                }
+                current_5m_high = current_5m_high.max(price);
+                current_5m_low = current_5m_low.min(price);
+                current_5m_close = price;
+
+                // Every 1 minute (12 ticks at 5-second intervals), emit 1-minute OHLC candle
+                if tick_counter % 12 == 0 {
+                    if let (Some(open), Some(start_time)) = (current_1m_open, current_1m_start) {
+                        let candle = Candle {
+                            timestamp: start_time,
+                            asset: asset.to_string(),
+                            open,
+                            high: current_1m_high,
+                            low: current_1m_low,
+                            close: current_1m_close,
+                        };
+                        state.add_ohlc_candle_1m(candle).await;
+                        info!("Added {} 1-minute OHLC candle: O={:.2} H={:.2} L={:.2} C={:.2}",
+                              asset, open, current_1m_high, current_1m_low, current_1m_close);
+
+                        // Reset 1-minute accumulator
+                        current_1m_open = None;
+                        current_1m_high = 0.0;
+                        current_1m_low = f64::INFINITY;
+                        current_1m_start = None;
+                    }
+                }
+
+                // Every 5 minutes (60 ticks at 5-second intervals), emit 5-minute OHLC candle
                 if tick_counter % 60 == 0 {
+                    // Add to old candle_window for backward compatibility
                     state.add_candle(price_point).await;
                     info!("Added {} 5-minute candle", asset);
+
+                    // Add 5-minute OHLC candle
+                    if let (Some(open), Some(start_time)) = (current_5m_open, current_5m_start) {
+                        let candle = Candle {
+                            timestamp: start_time,
+                            asset: asset.to_string(),
+                            open,
+                            high: current_5m_high,
+                            low: current_5m_low,
+                            close: current_5m_close,
+                        };
+                        state.add_ohlc_candle_5m(candle).await;
+                        info!("Added {} 5-minute OHLC candle: O={:.2} H={:.2} L={:.2} C={:.2}",
+                              asset, open, current_5m_high, current_5m_low, current_5m_close);
+
+                        // Reset 5-minute accumulator
+                        current_5m_open = None;
+                        current_5m_high = 0.0;
+                        current_5m_low = f64::INFINITY;
+                        current_5m_start = None;
+                    }
                 }
             }
             Err(e) => {

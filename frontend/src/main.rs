@@ -765,11 +765,60 @@ fn App() -> Element {
     };
 
     // Re-fetch candle data when timeframe changes (only when in candlestick mode)
-    // Note: This will be triggered manually when switching to candlestick mode
     use_effect(move || {
-        let _current_timeframe = selected_timeframe();
-        // Just track the dependency for timeframe changes
-        // The actual fetch happens in the onclick handler
+        let timeframe = selected_timeframe();
+        let current_chart_type = chart_type();
+
+        // Fetch immediately if we're in candlestick mode and in Trading view
+        if current_chart_type == "candlestick" {
+            if let AppView::Trading(asset) = &*current_view.peek() {
+                // Extract base asset from trading pair
+                let base_asset = if asset.contains('/') {
+                    asset.split('/').next().unwrap_or("BTC")
+                } else {
+                    asset.as_str()
+                };
+                fetch_candle_history(base_asset);
+            }
+        }
+    });
+
+    // Periodic candle history refresh based on timeframe
+    // 1h view: refresh every 60 seconds (new 1-minute candle)
+    // 8h/24h views: refresh every 5 minutes (new 5-minute candle)
+    use_effect(move || {
+        spawn(async move {
+            loop {
+                let timeframe = selected_timeframe();
+                let current_chart_type = chart_type();
+
+                // Only poll if in candlestick mode
+                if current_chart_type == "candlestick" {
+                    // Determine refresh interval based on timeframe
+                    let interval_ms = match timeframe.as_str() {
+                        "1h" => 60_000,  // 1 minute for 1h view
+                        "8h" | "24h" => 300_000,  // 5 minutes for 8h/24h views
+                        _ => 60_000,  // Default to 1 minute
+                    };
+
+                    gloo_timers::future::TimeoutFuture::new(interval_ms).await;
+
+                    // Fetch candles for the current trading pair
+                    if let AppView::Trading(asset) = &*current_view.peek() {
+                        // Extract base asset from trading pair
+                        let base_asset = if asset.contains('/') {
+                            asset.split('/').next().unwrap_or("BTC")
+                        } else {
+                            asset.as_str()
+                        };
+                        fetch_candle_history(base_asset);
+                    }
+                } else {
+                    // If not in candlestick mode, just wait a bit before checking again
+                    gloo_timers::future::TimeoutFuture::new(5_000).await;
+                }
+            }
+        });
     });
 
     // Auth handlers
