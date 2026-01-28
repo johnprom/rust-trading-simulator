@@ -155,10 +155,15 @@
   - ✅ Purple (#9C27B0) color scheme for RSI line
 
 **Frontend Improvements**
-- [ ] Landing page
-- [ ] Enhanced dashboard design
 - [ ] Improved styling and responsive design
-
+  - use financial colors: off-white shade for page backing, lighter shade for content backing, dark grey and navy for accents (buy/sell green/red and color coding for graphs can be exempt)
+  - use no more than 2 professional looking fonts (the existing one on the login page and market labels is good to keep)
+  - the landing page can be a different color (navy) and two elements one before the other such that on a wider preview the text is to the left: (1) Large left centered text saying "Trading \n Simulator" towrads the top and smaller text with credits towards the bottom (2) the existing login component
+  - the header should have its own distinct block in navy (text to left and navigation on right) 
+  - the "logged in as: User" info should be in a block pinned to the bottom of page also in a different color (maybe grey) also in this block we should have a bot status info which help indicate if and which bot is running currently even if you are not looking at the trading view
+- [ ] Enhanced dashboard design
+ - Portfolio element should have 3 components (side by side) (1) estimated total value and avaiable cash (2) a simple list of all asset balances (including USD) (3) a pie chart giving a breakdown of the portfolio composition
+ - the forms for account funding (deposit/widthdraw forms) should be separate and below the lifetime statistics. Further the form should be expandable down from a simple section that says "Fund account or make withdrawl"
 ---
 
 ## Phase 5 – Real-time Features & Advanced Features
@@ -172,7 +177,7 @@
 - [ ] Additional bot strategies (MA crossover, RSI-based, etc.)
 - [ ] Bot performance metrics and comparison
 
-## Phase 6 nice to haves and future improvements
+## Phase 6 - nice to haves and future improvements
 
 **Additional Features**
 - [ ] (lower priority) Technical indicators (MACD) - feature only enabled for 1h (5-second) window

@@ -9,6 +9,7 @@ enum AppView {
     Dashboard,
     Markets,
     Trading(String), // Trading view for specific asset
+    About,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -159,7 +160,7 @@ struct BotResponse {
     message: String,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 struct BotStatusResponse {
     is_active: bool,
     bot_name: Option<String>,
@@ -199,6 +200,19 @@ struct TradeErrorResponse {
 }
 
 const API_BASE: &str = "http://localhost:3000/api";
+
+// Color scheme constants
+const COLOR_NAVY: &str = "#1a237e";
+const COLOR_PAGE_BG: &str = "#f5f5f5";
+const COLOR_CONTENT_BG: &str = "#fefefe";
+const COLOR_DARK_GREY: &str = "#424242";
+const COLOR_LIGHT_GREY: &str = "#757575";
+const COLOR_GREEN: &str = "#4caf50";
+const COLOR_RED: &str = "#f44336";
+
+// Typography - Inter for headers, system fonts for body
+const FONT_HEADER: &str = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+const FONT_BODY: &str = "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif";
 
 fn format_timestamp(timestamp: &str) -> String {
     // Parse ISO 8601 timestamp and format it nicely
@@ -866,6 +880,342 @@ fn RSIPanel(props: RSIPanelProps) -> Element {
     }
 }
 
+#[derive(Clone, PartialEq, Props)]
+struct HeaderProps {
+    current_view: AppView,
+    username: String,
+    on_navigate: EventHandler<AppView>,
+    on_logout: EventHandler<()>,
+}
+
+#[component]
+fn Header(props: HeaderProps) -> Element {
+    let mut show_markets_dropdown = use_signal(|| false);
+
+    rsx! {
+        div {
+            style: format!(
+                "background: {}; color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);",
+                COLOR_NAVY
+            ),
+
+            // Left: App title (clickable to Dashboard)
+            div {
+                onclick: move |_| props.on_navigate.call(AppView::Dashboard),
+                style: format!("font-size: 24px; font-weight: 600; cursor: pointer; font-family: {};", FONT_HEADER),
+                "Trading Simulator"
+            }
+
+            // Right: Navigation
+            div {
+                style: "display: flex; gap: 20px; align-items: center; position: relative;",
+
+                // Dashboard link
+                div {
+                    onclick: move |_| props.on_navigate.call(AppView::Dashboard),
+                    style: format!(
+                        "cursor: pointer; padding: 8px 16px; border-radius: 4px; background: {}; font-family: {};",
+                        if matches!(props.current_view, AppView::Dashboard) { "rgba(255,255,255,0.2)" } else { "transparent" },
+                        FONT_BODY
+                    ),
+                    "Dashboard"
+                }
+
+                // Markets dropdown
+                div {
+                    style: "position: relative;",
+                    div {
+                        onclick: move |_| show_markets_dropdown.set(!show_markets_dropdown()),
+                        style: format!(
+                            "cursor: pointer; padding: 8px 16px; border-radius: 4px; background: {}; font-family: {};",
+                            if matches!(props.current_view, AppView::Markets | AppView::Trading(_)) { "rgba(255,255,255,0.2)" } else { "transparent" },
+                            FONT_BODY
+                        ),
+                        "Markets ▾"
+                    }
+
+                    if show_markets_dropdown() {
+                        div {
+                            style: format!(
+                                "position: absolute; top: 100%; right: 0; margin-top: 8px; background: {}; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); min-width: 150px; z-index: 1000;",
+                                COLOR_CONTENT_BG
+                            ),
+                            div {
+                                onclick: move |_| {
+                                    show_markets_dropdown.set(false);
+                                    props.on_navigate.call(AppView::Markets);
+                                },
+                                style: format!("padding: 12px 16px; cursor: pointer; color: {}; font-family: {}; border-bottom: 1px solid #e0e0e0;", COLOR_DARK_GREY, FONT_BODY),
+                                "All Markets"
+                            }
+                            div {
+                                onclick: move |_| {
+                                    show_markets_dropdown.set(false);
+                                    props.on_navigate.call(AppView::Trading("BTC".to_string()));
+                                },
+                                style: format!("padding: 12px 16px; cursor: pointer; color: {}; font-family: {}; border-bottom: 1px solid #e0e0e0;", COLOR_DARK_GREY, FONT_BODY),
+                                "BTC/USD"
+                            }
+                            div {
+                                onclick: move |_| {
+                                    show_markets_dropdown.set(false);
+                                    props.on_navigate.call(AppView::Trading("ETH".to_string()));
+                                },
+                                style: format!("padding: 12px 16px; cursor: pointer; color: {}; font-family: {}; border-bottom: 1px solid #e0e0e0;", COLOR_DARK_GREY, FONT_BODY),
+                                "ETH/USD"
+                            }
+                            div {
+                                onclick: move |_| {
+                                    show_markets_dropdown.set(false);
+                                    props.on_navigate.call(AppView::Trading("BTC/ETH".to_string()));
+                                },
+                                style: format!("padding: 12px 16px; cursor: pointer; color: {}; font-family: {};", COLOR_DARK_GREY, FONT_BODY),
+                                "BTC/ETH"
+                            }
+                        }
+                    }
+                }
+
+                // About link
+                div {
+                    onclick: move |_| props.on_navigate.call(AppView::About),
+                    style: format!(
+                        "cursor: pointer; padding: 8px 16px; border-radius: 4px; background: {}; font-family: {};",
+                        if matches!(props.current_view, AppView::About) { "rgba(255,255,255,0.2)" } else { "transparent" },
+                        FONT_BODY
+                    ),
+                    "About"
+                }
+
+                // Logout link
+                div {
+                    onclick: move |_| props.on_logout.call(()),
+                    style: format!("cursor: pointer; padding: 8px 16px; border-radius: 4px; background: transparent; font-family: {};", FONT_BODY),
+                    "Logout"
+                }
+            }
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Props)]
+struct StatusBarProps {
+    username: String,
+    bot_status: Option<BotStatusResponse>,
+}
+
+#[component]
+fn StatusBar(props: StatusBarProps) -> Element {
+    let bot_display = if let Some(ref status) = props.bot_status {
+        if status.is_active {
+            format!(
+                "Status: {} Bot running in {}",
+                status.bot_name.as_ref().unwrap_or(&"Unknown".to_string()),
+                status.trading_pair.as_ref().unwrap_or(&"Unknown".to_string())
+            )
+        } else {
+            "Status: No bot running in account..".to_string()
+        }
+    } else {
+        "Status: No bot running in account..".to_string()
+    };
+
+    rsx! {
+        div {
+            style: format!(
+                "position: fixed; bottom: 0; left: 0; right: 0; background: {}; color: white; padding: 10px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 -2px 4px rgba(0,0,0,0.1); font-family: {}; font-size: 14px; z-index: 1000;",
+                COLOR_LIGHT_GREY,
+                FONT_BODY
+            ),
+            div {
+                "Logged in as: {props.username}"
+            }
+            div {
+                "{bot_display}"
+            }
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Props)]
+struct PortfolioPieChartProps {
+    btc_balance: f64,
+    eth_balance: f64,
+    cash_balance: f64,
+    btc_price: f64,
+    eth_price: f64,
+}
+
+#[component]
+fn PortfolioPieChart(props: PortfolioPieChartProps) -> Element {
+    // Calculate USD values
+    let btc_value = props.btc_balance * props.btc_price;
+    let eth_value = props.eth_balance * props.eth_price;
+    let cash_value = props.cash_balance;
+    let total_value = btc_value + eth_value + cash_value;
+
+    if total_value == 0.0 {
+        return rsx! {
+            div {
+                style: "text-align: center; padding: 20px; color: #666;",
+                "No assets to display"
+            }
+        };
+    }
+
+    // Calculate percentages and angles
+    let btc_pct = (btc_value / total_value) * 100.0;
+    let eth_pct = (eth_value / total_value) * 100.0;
+    let cash_pct = (cash_value / total_value) * 100.0;
+
+    // Colors from neutral palette
+    let btc_color = "#5C6BC0"; // Indigo
+    let eth_color = "#42A5F5"; // Blue
+    let cash_color = "#66BB6A"; // Green
+
+    // SVG pie chart
+    let size = 200.0;
+    let center = size / 2.0;
+    let radius = 80.0;
+
+    // Calculate pie slices
+    let mut current_angle = 0.0;
+
+    // BTC slice
+    let btc_angle = (btc_pct / 100.0) * 360.0;
+    let btc_end_angle = current_angle + btc_angle;
+
+    // ETH slice
+    current_angle = btc_end_angle;
+    let eth_angle = (eth_pct / 100.0) * 360.0;
+    let eth_end_angle = current_angle + eth_angle;
+
+    // Cash slice takes the rest
+    let _current_angle = eth_end_angle;
+
+    fn get_arc_path(cx: f64, cy: f64, r: f64, start_angle: f64, end_angle: f64) -> String {
+        let start_rad = (start_angle - 90.0) * std::f64::consts::PI / 180.0;
+        let end_rad = (end_angle - 90.0) * std::f64::consts::PI / 180.0;
+
+        let x1 = cx + r * start_rad.cos();
+        let y1 = cy + r * start_rad.sin();
+        let x2 = cx + r * end_rad.cos();
+        let y2 = cy + r * end_rad.sin();
+
+        let large_arc = if end_angle - start_angle > 180.0 { 1 } else { 0 };
+
+        format!("M {},{} L {},{} A {},{} 0 {},{} {},{} Z",
+                cx, cy, x1, y1, r, r, large_arc, 1, x2, y2)
+    }
+
+    let mut svg_elements = String::new();
+
+    // BTC slice
+    if btc_pct > 0.0 {
+        svg_elements.push_str(&format!(
+            "<path d=\"{}\" fill=\"{}\" />",
+            get_arc_path(center, center, radius, 0.0, btc_end_angle),
+            btc_color
+        ));
+    }
+
+    // ETH slice
+    if eth_pct > 0.0 {
+        svg_elements.push_str(&format!(
+            "<path d=\"{}\" fill=\"{}\" />",
+            get_arc_path(center, center, radius, btc_end_angle, eth_end_angle),
+            eth_color
+        ));
+    }
+
+    // Cash slice
+    if cash_pct > 0.0 {
+        svg_elements.push_str(&format!(
+            "<path d=\"{}\" fill=\"{}\" />",
+            get_arc_path(center, center, radius, eth_end_angle, 360.0),
+            cash_color
+        ));
+    }
+
+    rsx! {
+        div {
+            style: "display: flex; flex-direction: column; align-items: center;",
+
+            // SVG Pie Chart
+            div {
+                dangerous_inner_html: format!(
+                    "<svg width=\"{}\" height=\"{}\" viewBox=\"0 0 {} {}\"><g>{}</g></svg>",
+                    size, size, size, size, svg_elements
+                )
+            }
+
+            // Legend
+            div {
+                style: format!("margin-top: 15px; font-size: 13px; font-family: {};", FONT_BODY),
+                if btc_pct > 0.0 {
+                    div {
+                        style: "display: flex; align-items: center; gap: 8px; margin-bottom: 5px;",
+                        div { style: format!("width: 16px; height: 16px; background: {}; border-radius: 2px;", btc_color) }
+                        span { "BTC: {btc_pct:.1}%" }
+                    }
+                }
+                if eth_pct > 0.0 {
+                    div {
+                        style: "display: flex; align-items: center; gap: 8px; margin-bottom: 5px;",
+                        div { style: format!("width: 16px; height: 16px; background: {}; border-radius: 2px;", eth_color) }
+                        span { "ETH: {eth_pct:.1}%" }
+                    }
+                }
+                if cash_pct > 0.0 {
+                    div {
+                        style: "display: flex; align-items: center; gap: 8px;",
+                        div { style: format!("width: 16px; height: 16px; background: {}; border-radius: 2px;", cash_color) }
+                        span { "USD: {cash_pct:.1}%" }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Props)]
+struct ExpandableSectionProps {
+    title: String,
+    children: Element,
+}
+
+#[component]
+fn ExpandableSection(props: ExpandableSectionProps) -> Element {
+    let mut is_expanded = use_signal(|| false);
+
+    rsx! {
+        div {
+            style: format!("background: {}; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px;", COLOR_CONTENT_BG),
+
+            // Header (clickable to expand/collapse)
+            div {
+                onclick: move |_| is_expanded.set(!is_expanded()),
+                style: format!(
+                    "padding: 15px 20px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: {}; font-family: {}; font-weight: 600; color: {}; user-select: none;",
+                    if is_expanded() { COLOR_PAGE_BG } else { COLOR_CONTENT_BG },
+                    FONT_BODY,
+                    COLOR_DARK_GREY
+                ),
+                span { "{props.title}" }
+                span { style: "font-size: 20px;", if is_expanded() { "−" } else { "+" } }
+            }
+
+            // Content (only show when expanded)
+            if is_expanded() {
+                div {
+                    style: "padding: 20px;",
+                    {props.children}
+                }
+            }
+        }
+    }
+}
+
 fn App() -> Element {
     let mut current_view = use_signal(|| AppView::Auth);
     let mut user_id = use_signal(|| String::new());
@@ -1081,7 +1431,7 @@ fn App() -> Element {
 
     // Re-fetch candle data when timeframe changes (only when in candlestick mode)
     use_effect(move || {
-        let timeframe = selected_timeframe();
+        let _timeframe = selected_timeframe();
         let current_chart_type = chart_type();
 
         // Fetch immediately if we're in candlestick mode and in Trading view
@@ -1532,239 +1882,423 @@ fn App() -> Element {
     };
 
     rsx! {
-        div { class: "container",
-            style: "max-width: 1200px; margin: 0 auto; padding: 20px; font-family: sans-serif;",
+        // Add Inter font from Google Fonts
+        head {
+            link {
+                rel: "stylesheet",
+                href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap"
+            }
+        }
 
-            match current_view() {
-                AppView::Auth => rsx! {
-                    div { style: "max-width: 500px; margin: 100px auto; text-align: center;",
-                        h1 { style: "margin-bottom: 40px;", "Trading Simulator" }
+        div {
+            style: format!("min-height: 100vh; background: {}; font-family: {};", COLOR_PAGE_BG, FONT_BODY),
 
-                        div { style: "background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);",
-                            h2 { style: "margin-bottom: 30px;", "Welcome" }
+            // Header (only show when not on Auth page)
+            if !matches!(current_view(), AppView::Auth) {
+                Header {
+                    current_view: current_view(),
+                    username: username(),
+                    on_navigate: move |view: AppView| current_view.set(view),
+                    on_logout: move |_| handle_logout()
+                }
+            }
 
-                            div { style: "margin-bottom: 20px;",
-                                input {
-                                    r#type: "text",
-                                    placeholder: "Username",
-                                    value: "{auth_username}",
-                                    oninput: move |e| auth_username.set(e.value()),
-                                    style: "width: 100%; padding: 12px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px;",
-                                }
-                                input {
-                                    r#type: "password",
-                                    placeholder: "Password",
-                                    value: "{auth_password}",
-                                    oninput: move |e| auth_password.set(e.value()),
-                                    style: "width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px;",
-                                }
-                            }
-
-                            div { style: "display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;",
-                                button {
-                                    onclick: move |_| handle_login(),
-                                    style: "padding: 14px; background: #2196F3; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold;",
-                                    "Login"
-                                }
-                                button {
-                                    onclick: move |_| handle_signup(),
-                                    style: "padding: 14px; background: #4caf50; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold;",
-                                    "Sign Up"
-                                }
-                            }
-
-                            div { style: "border-top: 1px solid #ddd; padding-top: 20px; margin-top: 20px;",
-                                button {
-                                    onclick: move |_| handle_guest(),
-                                    style: "width: 100%; padding: 14px; background: #9e9e9e; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold;",
-                                    "Continue as Guest"
-                                }
-                                p { style: "margin-top: 10px; font-size: 14px; color: #666;",
-                                    "Guest profile resets on app restart"
-                                }
-                            }
-
-                            if !auth_error().is_empty() {
-                                p { style: "margin-top: 15px; color: #f44336; font-weight: bold;", "{auth_error}" }
-                            }
-                        }
-                    }
+            // Main content area
+            div {
+                style: if matches!(current_view(), AppView::Auth) {
+                    "".to_string()
+                } else {
+                    "padding-bottom: 60px;".to_string() // Add padding for status bar
                 },
-                AppView::Dashboard => rsx! {
-                    div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;",
-                        div {
-                            h1 { style: "margin: 0;", "Trading Simulator - Dashboard" }
-                            p { style: "color: #666; margin: 5px 0 0 0;", "Logged in as: {username}" }
-                        }
-                        div { style: "display: flex; gap: 10px;",
-                            button {
-                                disabled: true,
-                                style: "padding: 10px 20px; background: #ccc; color: #666; border: none; border-radius: 4px; cursor: default; font-size: 14px; font-weight: bold;",
-                                "Dashboard"
-                            }
-                            button {
-                                onclick: move |_| current_view.set(AppView::Markets),
-                                style: "padding: 10px 20px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;",
-                                "Markets"
-                            }
-                            button {
-                                onclick: move |_| handle_logout(),
-                                style: "padding: 10px 20px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;",
-                                "Logout"
-                            }
-                        }
-                    }
 
-                    if let Some(p) = portfolio() {
-                        div { class: "portfolio",
-                            style: "background: #e8f5e9; padding: 20px; border-radius: 8px; margin: 20px 0;",
-                            h2 { "Portfolio" }
+                match current_view() {
+                    AppView::Auth => rsx! {
+                        // New landing page with navy background and two-column layout
+                        div {
+                            style: format!(
+                                "min-height: 100vh; background: {}; display: flex; align-items: center; justify-content: center; padding: 40px;",
+                                COLOR_NAVY
+                            ),
+                            div {
+                                style: "max-width: 1200px; width: 100%; display: flex; gap: 60px; align-items: center; flex-wrap: wrap;",
+
+                                // Left column: App branding
+                                div {
+                                    style: format!("flex: 1; min-width: 300px; color: white; font-family: {};", FONT_HEADER),
+                                    h1 {
+                                        style: "font-size: 64px; font-weight: 700; margin: 0 0 20px 0; line-height: 1.2;",
+                                        "Trading"
+                                    }
+                                    h1 {
+                                        style: "font-size: 64px; font-weight: 700; margin: 0 0 60px 0; line-height: 1.2;",
+                                        "Simulator"
+                                    }
+                                    p {
+                                        style: "font-size: 16px; opacity: 0.8; margin: 0;",
+                                        "Built with Rust"
+                                    }
+                                    p {
+                                        style: "font-size: 16px; opacity: 0.8; margin: 5px 0 0 0;",
+                                        "2025"
+                                    }
+                                }
+
+                                // Right column: Login component
+                                div {
+                                    style: format!("flex: 1; min-width: 350px; background: {}; padding: 40px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.2);", COLOR_CONTENT_BG),
+                                    h2 {
+                                        style: format!("margin: 0 0 30px 0; font-family: {}; color: {}; font-size: 28px;", FONT_HEADER, COLOR_DARK_GREY),
+                                        "Welcome"
+                                    }
+
+                                    div { style: "margin-bottom: 20px;",
+                                        input {
+                                            r#type: "text",
+                                            placeholder: "Username",
+                                            value: "{auth_username}",
+                                            oninput: move |e| auth_username.set(e.value()),
+                                            style: format!("width: 100%; padding: 12px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; font-family: {}; box-sizing: border-box;", FONT_BODY),
+                                        }
+                                        input {
+                                            r#type: "password",
+                                            placeholder: "Password",
+                                            value: "{auth_password}",
+                                            oninput: move |e| auth_password.set(e.value()),
+                                            style: format!("width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; font-family: {}; box-sizing: border-box;", FONT_BODY),
+                                        }
+                                    }
+
+                                    div { style: "display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;",
+                                        button {
+                                            onclick: move |_| handle_login(),
+                                            style: format!("padding: 14px; background: {}; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600; font-family: {};", COLOR_NAVY, FONT_BODY),
+                                            "Login"
+                                        }
+                                        button {
+                                            onclick: move |_| handle_signup(),
+                                            style: format!("padding: 14px; background: {}; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600; font-family: {};", COLOR_GREEN, FONT_BODY),
+                                            "Sign Up"
+                                        }
+                                    }
+
+                                    div { style: "border-top: 1px solid #ddd; padding-top: 20px; margin-top: 20px;",
+                                        button {
+                                            onclick: move |_| handle_guest(),
+                                            style: format!("width: 100%; padding: 14px; background: {}; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600; font-family: {};", COLOR_LIGHT_GREY, FONT_BODY),
+                                            "Continue as Guest"
+                                        }
+                                        p { style: format!("margin-top: 10px; font-size: 14px; color: {}; font-family: {};", COLOR_LIGHT_GREY, FONT_BODY),
+                                            "Guest profile resets on app restart"
+                                        }
+                                    }
+
+                                    if !auth_error().is_empty() {
+                                        p { style: format!("margin-top: 15px; color: {}; font-weight: bold; font-family: {};", COLOR_RED, FONT_BODY), "{auth_error}" }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                AppView::Dashboard => rsx! {
+                    div {
+                        style: format!("max-width: 1400px; margin: 0 auto; padding: 30px 20px; font-family: {};", FONT_BODY),
+
+                        h1 {
+                            style: format!("margin: 0 0 30px 0; font-family: {}; color: {}; font-size: 32px;", FONT_HEADER, COLOR_DARK_GREY),
+                            "Dashboard"
+                        }
+
+                        if let Some(p) = portfolio() {
+                            // Calculate total portfolio value in USD
                             {
-                                // Calculate total portfolio value in USD
                                 let mut total_value_usd = 0.0;
+                                let mut btc_bal = 0.0;
+                                let mut eth_bal = 0.0;
+                                let mut usd_bal = 0.0;
+
                                 for (asset, balance) in p.asset_balances.iter() {
                                     if asset == "USD" {
+                                        usd_bal = *balance;
                                         total_value_usd += balance;
                                     } else if asset == "BTC" {
+                                        btc_bal = *balance;
                                         total_value_usd += balance * btc_price();
                                     } else if asset == "ETH" {
+                                        eth_bal = *balance;
                                         total_value_usd += balance * eth_price();
                                     }
                                 }
 
                                 rsx! {
-                                    p { style: "font-size: 18px; font-weight: bold; margin-bottom: 15px;",
-                                        "Estimated Total Value: ${total_value_usd:.2}"
-                                    }
-                                }
-                            }
+                                    // 3-Column Portfolio Section
+                                    div {
+                                        style: format!("background: {}; padding: 30px; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);", COLOR_CONTENT_BG),
+                                        h2 {
+                                            style: format!("margin: 0 0 25px 0; font-family: {}; color: {}; font-size: 24px;", FONT_HEADER, COLOR_DARK_GREY),
+                                            "Portfolio"
+                                        }
 
-                            h3 { style: "margin-top: 20px; margin-bottom: 10px;", "Assets" }
-                            for (asset, balance) in p.asset_balances.iter() {
-                                if *balance > 0.0 || asset == "USD" {
-                                    if asset == "USD" {
-                                        p { style: "font-size: 16px; margin: 5px 0;", "USD: ${balance:.2}" }
-                                    } else {
-                                        p { style: "font-size: 16px; margin: 5px 0;", "{asset}: {balance:.8}" }
-                                    }
-                                }
-                            }
-                        }
+                                        div {
+                                            style: "display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 25px;",
 
-                        // Deposit/Withdrawal Controls
-                        div { class: "funding",
-                            style: "background: #fff3e0; padding: 20px; border-radius: 8px; margin: 20px 0;",
-                            h2 { "Account Funding" }
-
-                            div { style: "display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 15px;",
-                                // Deposit section
-                                div { style: "background: white; padding: 15px; border-radius: 4px; border: 1px solid #ddd;",
-                                    h3 { style: "margin-top: 0; color: #4caf50;", "Deposit" }
-                                    p { style: "font-size: 12px; color: #666; margin: 5px 0;", "Min: $10 | Max: $100,000" }
-                                    input {
-                                        r#type: "number",
-                                        value: "{deposit_amount}",
-                                        oninput: move |e| deposit_amount.set(e.value().clone()),
-                                        style: "width: 100%; padding: 10px; margin: 10px 0; font-size: 16px; border: 1px solid #ddd; border-radius: 4px;",
-                                        placeholder: "Amount"
-                                    }
-                                    button {
-                                        onclick: move |_| execute_deposit(),
-                                        style: "width: 100%; padding: 12px; background: #4caf50; color: white; border: none; border-radius: 4px; font-size: 16px; font-weight: bold; cursor: pointer;",
-                                        "Deposit Funds"
-                                    }
-                                }
-
-                                // Withdrawal section
-                                div { style: "background: white; padding: 15px; border-radius: 4px; border: 1px solid #ddd;",
-                                    h3 { style: "margin-top: 0; color: #f44336;", "Withdraw" }
-                                    p { style: "font-size: 12px; color: #666; margin: 5px 0;", "Available: ${p.cash_balance:.2}" }
-                                    input {
-                                        r#type: "number",
-                                        value: "{withdrawal_amount}",
-                                        oninput: move |e| withdrawal_amount.set(e.value().clone()),
-                                        style: "width: 100%; padding: 10px; margin: 10px 0; font-size: 16px; border: 1px solid #ddd; border-radius: 4px;",
-                                        placeholder: "Amount"
-                                    }
-                                    button {
-                                        onclick: move |_| execute_withdrawal(),
-                                        style: "width: 100%; padding: 12px; background: #f44336; color: white; border: none; border-radius: 4px; font-size: 16px; font-weight: bold; cursor: pointer;",
-                                        "Withdraw Funds"
-                                    }
-                                }
-                            }
-
-                            // Lifetime stats
-                            {
-                                let lifetime_deposits: f64 = p.trade_history.iter()
-                                    .filter(|t| t.transaction_type == TransactionType::Deposit)
-                                    .map(|t| t.quantity)
-                                    .sum();
-                                let lifetime_withdrawals: f64 = p.trade_history.iter()
-                                    .filter(|t| t.transaction_type == TransactionType::Withdrawal)
-                                    .map(|t| t.quantity)
-                                    .sum();
-                                let lifetime_funding = 10000.0 + lifetime_deposits;
-
-                                // Calculate total trade volume in USD (estimated for cross-pairs)
-                                let total_trade_volume_usd: f64 = p.trade_history.iter()
-                                    .filter(|t| t.transaction_type == TransactionType::Trade)
-                                    .filter_map(|t| {
-                                        // Calculate USD value: quantity * price * quote_usd_price
-                                        t.quote_usd_price.map(|q_usd| t.quantity * t.price * q_usd)
-                                    })
-                                    .sum();
-
-                                rsx! {
-                                    div { style: "margin-top: 20px; padding: 15px; background: white; border-radius: 4px; border: 1px solid #ddd;",
-                                        h3 { style: "margin-top: 0;", "Lifetime Statistics" }
-                                        div { style: "display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 15px; text-align: center;",
+                                            // Column 1: Total Value & Available Cash
                                             div {
-                                                p { style: "margin: 0; font-size: 12px; color: #666;", "Total Funding" }
-                                                p { style: "margin: 5px 0 0 0; font-size: 20px; font-weight: bold; color: #4caf50;", "${lifetime_funding:.2}" }
+                                                style: format!("background: {}; padding: 20px; border-radius: 6px; border: 1px solid #e0e0e0;", COLOR_PAGE_BG),
+                                                h3 {
+                                                    style: format!("margin: 0 0 15px 0; font-family: {}; color: {}; font-size: 16px; font-weight: 600;", FONT_BODY, COLOR_DARK_GREY),
+                                                    "Value Summary"
+                                                }
+                                                div {
+                                                    style: "margin-bottom: 15px;",
+                                                    p {
+                                                        style: format!("margin: 0; font-size: 12px; color: {}; font-family: {};", COLOR_LIGHT_GREY, FONT_BODY),
+                                                        "Estimated Total Value"
+                                                    }
+                                                    p {
+                                                        style: format!("margin: 5px 0 0 0; font-size: 28px; font-weight: bold; color: {}; font-family: {};", COLOR_GREEN, FONT_HEADER),
+                                                        "${total_value_usd:.2}"
+                                                    }
+                                                }
+                                                div {
+                                                    p {
+                                                        style: format!("margin: 0; font-size: 12px; color: {}; font-family: {};", COLOR_LIGHT_GREY, FONT_BODY),
+                                                        "Available Cash"
+                                                    }
+                                                    p {
+                                                        style: format!("margin: 5px 0 0 0; font-size: 20px; font-weight: 600; color: {}; font-family: {};", COLOR_DARK_GREY, FONT_BODY),
+                                                        "${usd_bal:.2}"
+                                                    }
+                                                }
                                             }
+
+                                            // Column 2: Asset Balances List
                                             div {
-                                                p { style: "margin: 0; font-size: 12px; color: #666;", "Total Deposits" }
-                                                p { style: "margin: 5px 0 0 0; font-size: 20px; font-weight: bold;", "${lifetime_deposits:.2}" }
+                                                style: format!("background: {}; padding: 20px; border-radius: 6px; border: 1px solid #e0e0e0;", COLOR_PAGE_BG),
+                                                h3 {
+                                                    style: format!("margin: 0 0 15px 0; font-family: {}; color: {}; font-size: 16px; font-weight: 600;", FONT_BODY, COLOR_DARK_GREY),
+                                                    "Asset Balances"
+                                                }
+                                                div {
+                                                    style: "display: flex; flex-direction: column; gap: 10px;",
+                                                    div {
+                                                        style: "display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e0e0e0;",
+                                                        span {
+                                                            style: format!("font-weight: 600; color: {}; font-family: {};", COLOR_DARK_GREY, FONT_BODY),
+                                                            "USD"
+                                                        }
+                                                        span {
+                                                            style: format!("color: {}; font-family: {};", COLOR_DARK_GREY, FONT_BODY),
+                                                            "${usd_bal:.2}"
+                                                        }
+                                                    }
+                                                    div {
+                                                        style: "display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e0e0e0;",
+                                                        span {
+                                                            style: format!("font-weight: 600; color: {}; font-family: {};", COLOR_DARK_GREY, FONT_BODY),
+                                                            "BTC"
+                                                        }
+                                                        span {
+                                                            style: format!("color: {}; font-family: {};", COLOR_DARK_GREY, FONT_BODY),
+                                                            "{btc_bal:.8}"
+                                                        }
+                                                    }
+                                                    div {
+                                                        style: "display: flex; justify-content: space-between; align-items: center; padding: 8px 0;",
+                                                        span {
+                                                            style: format!("font-weight: 600; color: {}; font-family: {};", COLOR_DARK_GREY, FONT_BODY),
+                                                            "ETH"
+                                                        }
+                                                        span {
+                                                            style: format!("color: {}; font-family: {};", COLOR_DARK_GREY, FONT_BODY),
+                                                            "{eth_bal:.8}"
+                                                        }
+                                                    }
+                                                }
                                             }
+
+                                            // Column 3: Pie Chart
                                             div {
-                                                p { style: "margin: 0; font-size: 12px; color: #666;", "Total Withdrawals" }
-                                                p { style: "margin: 5px 0 0 0; font-size: 20px; font-weight: bold; color: #f44336;", "${lifetime_withdrawals:.2}" }
+                                                style: format!("background: {}; padding: 20px; border-radius: 6px; border: 1px solid #e0e0e0; display: flex; flex-direction: column; align-items: center; justify-content: center;", COLOR_PAGE_BG),
+                                                h3 {
+                                                    style: format!("margin: 0 0 15px 0; font-family: {}; color: {}; font-size: 16px; font-weight: 600; width: 100%; text-align: center;", FONT_BODY, COLOR_DARK_GREY),
+                                                    "Composition"
+                                                }
+                                                PortfolioPieChart {
+                                                    btc_balance: btc_bal,
+                                                    eth_balance: eth_bal,
+                                                    cash_balance: usd_bal,
+                                                    btc_price: btc_price(),
+                                                    eth_price: eth_price()
+                                                }
                                             }
+                                        }
+                                    }
+
+                                    // Lifetime Statistics
+                                    {
+                                        let lifetime_deposits: f64 = p.trade_history.iter()
+                                            .filter(|t| t.transaction_type == TransactionType::Deposit)
+                                            .map(|t| t.quantity)
+                                            .sum();
+                                        let lifetime_withdrawals: f64 = p.trade_history.iter()
+                                            .filter(|t| t.transaction_type == TransactionType::Withdrawal)
+                                            .map(|t| t.quantity)
+                                            .sum();
+                                        let lifetime_funding = 10000.0 + lifetime_deposits;
+                                        let total_trade_volume_usd: f64 = p.trade_history.iter()
+                                            .filter(|t| t.transaction_type == TransactionType::Trade)
+                                            .filter_map(|t| {
+                                                t.quote_usd_price.map(|q_usd| t.quantity * t.price * q_usd)
+                                            })
+                                            .sum();
+
+                                        rsx! {
                                             div {
-                                                p { style: "margin: 0; font-size: 12px; color: #666;", "Trade Volume (USD)" }
-                                                p { style: "margin: 5px 0 0 0; font-size: 20px; font-weight: bold; color: #2196F3;", "${total_trade_volume_usd:.2}" }
+                                                style: format!("background: {}; padding: 25px; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);", COLOR_CONTENT_BG),
+                                                h2 {
+                                                    style: format!("margin: 0 0 20px 0; font-family: {}; color: {}; font-size: 24px;", FONT_HEADER, COLOR_DARK_GREY),
+                                                    "Lifetime Statistics"
+                                                }
+                                                div {
+                                                    style: "display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;",
+                                                    div {
+                                                        style: format!("text-align: center; padding: 15px; background: {}; border-radius: 6px;", COLOR_PAGE_BG),
+                                                        p {
+                                                            style: format!("margin: 0; font-size: 12px; color: {}; font-family: {};", COLOR_LIGHT_GREY, FONT_BODY),
+                                                            "Total Funding"
+                                                        }
+                                                        p {
+                                                            style: format!("margin: 8px 0 0 0; font-size: 24px; font-weight: bold; color: {}; font-family: {};", COLOR_GREEN, FONT_HEADER),
+                                                            "${lifetime_funding:.2}"
+                                                        }
+                                                    }
+                                                    div {
+                                                        style: format!("text-align: center; padding: 15px; background: {}; border-radius: 6px;", COLOR_PAGE_BG),
+                                                        p {
+                                                            style: format!("margin: 0; font-size: 12px; color: {}; font-family: {};", COLOR_LIGHT_GREY, FONT_BODY),
+                                                            "Total Deposits"
+                                                        }
+                                                        p {
+                                                            style: format!("margin: 8px 0 0 0; font-size: 24px; font-weight: bold; color: {}; font-family: {};", COLOR_DARK_GREY, FONT_HEADER),
+                                                            "${lifetime_deposits:.2}"
+                                                        }
+                                                    }
+                                                    div {
+                                                        style: format!("text-align: center; padding: 15px; background: {}; border-radius: 6px;", COLOR_PAGE_BG),
+                                                        p {
+                                                            style: format!("margin: 0; font-size: 12px; color: {}; font-family: {};", COLOR_LIGHT_GREY, FONT_BODY),
+                                                            "Total Withdrawals"
+                                                        }
+                                                        p {
+                                                            style: format!("margin: 8px 0 0 0; font-size: 24px; font-weight: bold; color: {}; font-family: {};", COLOR_RED, FONT_HEADER),
+                                                            "${lifetime_withdrawals:.2}"
+                                                        }
+                                                    }
+                                                    div {
+                                                        style: format!("text-align: center; padding: 15px; background: {}; border-radius: 6px;", COLOR_PAGE_BG),
+                                                        p {
+                                                            style: format!("margin: 0; font-size: 12px; color: {}; font-family: {};", COLOR_LIGHT_GREY, FONT_BODY),
+                                                            "Trade Volume (USD)"
+                                                        }
+                                                        p {
+                                                            style: format!("margin: 8px 0 0 0; font-size: 24px; font-weight: bold; color: {}; font-family: {};", COLOR_NAVY, FONT_HEADER),
+                                                            "${total_trade_volume_usd:.2}"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Expandable Deposit/Withdraw Section
+                                    ExpandableSection {
+                                        title: "Fund Account or Make Withdrawal".to_string(),
+                                        children: rsx! {
+                                            div {
+                                                style: "display: grid; grid-template-columns: 1fr 1fr; gap: 20px;",
+
+                                                // Deposit form
+                                                div {
+                                                    style: format!("padding: 20px; background: {}; border-radius: 6px; border: 1px solid #e0e0e0;", COLOR_PAGE_BG),
+                                                    h3 {
+                                                        style: format!("margin: 0 0 10px 0; color: {}; font-family: {};", COLOR_GREEN, FONT_HEADER),
+                                                        "Deposit"
+                                                    }
+                                                    p {
+                                                        style: format!("font-size: 12px; color: {}; margin: 5px 0 15px 0; font-family: {};", COLOR_LIGHT_GREY, FONT_BODY),
+                                                        "Min: $10 | Max: $100,000"
+                                                    }
+                                                    input {
+                                                        r#type: "number",
+                                                        value: "{deposit_amount}",
+                                                        oninput: move |e| deposit_amount.set(e.value().clone()),
+                                                        style: format!("width: 100%; padding: 12px; margin-bottom: 10px; font-size: 16px; border: 1px solid #ddd; border-radius: 4px; font-family: {}; box-sizing: border-box;", FONT_BODY),
+                                                        placeholder: "Amount"
+                                                    }
+                                                    button {
+                                                        onclick: move |_| execute_deposit(),
+                                                        style: format!("width: 100%; padding: 12px; background: {}; color: white; border: none; border-radius: 4px; font-size: 16px; font-weight: 600; cursor: pointer; font-family: {};", COLOR_GREEN, FONT_BODY),
+                                                        "Deposit Funds"
+                                                    }
+                                                }
+
+                                                // Withdrawal form
+                                                div {
+                                                    style: format!("padding: 20px; background: {}; border-radius: 6px; border: 1px solid #e0e0e0;", COLOR_PAGE_BG),
+                                                    h3 {
+                                                        style: format!("margin: 0 0 10px 0; color: {}; font-family: {};", COLOR_RED, FONT_HEADER),
+                                                        "Withdraw"
+                                                    }
+                                                    p {
+                                                        style: format!("font-size: 12px; color: {}; margin: 5px 0 15px 0; font-family: {};", COLOR_LIGHT_GREY, FONT_BODY),
+                                                        "Available: ${usd_bal:.2}"
+                                                    }
+                                                    input {
+                                                        r#type: "number",
+                                                        value: "{withdrawal_amount}",
+                                                        oninput: move |e| withdrawal_amount.set(e.value().clone()),
+                                                        style: format!("width: 100%; padding: 12px; margin-bottom: 10px; font-size: 16px; border: 1px solid #ddd; border-radius: 4px; font-family: {}; box-sizing: border-box;", FONT_BODY),
+                                                        placeholder: "Amount"
+                                                    }
+                                                    button {
+                                                        onclick: move |_| execute_withdrawal(),
+                                                        style: format!("width: 100%; padding: 12px; background: {}; color: white; border: none; border-radius: 4px; font-size: 16px; font-weight: 600; cursor: pointer; font-family: {};", COLOR_RED, FONT_BODY),
+                                                        "Withdraw Funds"
+                                                    }
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
-                        }
 
-                        // Transaction History
-                        div { class: "trade-history",
-                            style: "background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #ddd;",
-                            h2 { "Transaction History" }
-                            if p.trade_history.is_empty() {
-                                p { style: "color: #666;", "No transactions yet" }
-                            } else {
-                                div { style: "overflow-x: auto;",
-                                    table { style: "width: 100%; border-collapse: collapse;",
-                                        thead {
-                                            tr { style: "border-bottom: 2px solid #ddd;",
-                                                th { style: "padding: 10px; text-align: left;", "Type" }
-                                                th { style: "padding: 10px; text-align: left;", "Asset" }
-                                                th { style: "padding: 10px; text-align: left;", "Action" }
-                                                th { style: "padding: 10px; text-align: right;", "Quantity" }
-                                                th { style: "padding: 10px; text-align: right;", "Price" }
-                                                th { style: "padding: 10px; text-align: right;", "Total" }
-                                                th { style: "padding: 10px; text-align: center;", "Source" }
-                                                th { style: "padding: 10px; text-align: left;", "Time" }
+                            // Transaction History
+                            div {
+                                style: format!("background: {}; padding: 25px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);", COLOR_CONTENT_BG),
+                                h2 {
+                                    style: format!("margin: 0 0 20px 0; font-family: {}; color: {}; font-size: 24px;", FONT_HEADER, COLOR_DARK_GREY),
+                                    "Transaction History"
+                                }
+                                if p.trade_history.is_empty() {
+                                    p { style: format!("color: {}; font-family: {};", COLOR_LIGHT_GREY, FONT_BODY), "No transactions yet" }
+                                } else {
+                                    div { style: "overflow-x: auto;",
+                                        table { style: format!("width: 100%; border-collapse: collapse; font-family: {};", FONT_BODY),
+                                            thead {
+                                                tr { style: format!("border-bottom: 2px solid {}; background: {};", COLOR_PAGE_BG, COLOR_PAGE_BG),
+                                                    th { style: format!("padding: 12px 10px; text-align: left; font-weight: 600; color: {};", COLOR_DARK_GREY), "Type" }
+                                                    th { style: format!("padding: 12px 10px; text-align: left; font-weight: 600; color: {};", COLOR_DARK_GREY), "Asset" }
+                                                    th { style: format!("padding: 12px 10px; text-align: left; font-weight: 600; color: {};", COLOR_DARK_GREY), "Action" }
+                                                    th { style: format!("padding: 12px 10px; text-align: right; font-weight: 600; color: {};", COLOR_DARK_GREY), "Quantity" }
+                                                    th { style: format!("padding: 12px 10px; text-align: right; font-weight: 600; color: {};", COLOR_DARK_GREY), "Price" }
+                                                    th { style: format!("padding: 12px 10px; text-align: right; font-weight: 600; color: {};", COLOR_DARK_GREY), "Total" }
+                                                    th { style: format!("padding: 12px 10px; text-align: center; font-weight: 600; color: {};", COLOR_DARK_GREY), "Source" }
+                                                    th { style: format!("padding: 12px 10px; text-align: left; font-weight: 600; color: {};", COLOR_DARK_GREY), "Time" }
+                                                }
                                             }
-                                        }
-                                        tbody {
-                                            for trade in p.trade_history.iter().rev().take(10) {
-                                                tr { style: "border-bottom: 1px solid #eee;",
+                                            tbody {
+                                                for trade in p.trade_history.iter().rev().take(10) {
+                                                    tr { style: "border-bottom: 1px solid #e0e0e0;",
                                                     // Transaction Type
                                                     td {
                                                         style: "padding: 10px;",
@@ -1845,48 +2379,45 @@ fn App() -> Element {
                                 }
                             }
                         }
+                    } else {
+                        p { style: format!("color: {}; font-family: {};", COLOR_LIGHT_GREY, FONT_BODY), "Loading portfolio..." }
                     }
-                },
+                }
+            },
                 AppView::Markets => rsx! {
-                    div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;",
-                        div {
-                            h1 { style: "margin: 0;", "Trading Simulator - Markets" }
-                            p { style: "color: #666; margin: 5px 0 0 0;", "Logged in as: {username}" }
-                        }
-                        div { style: "display: flex; gap: 10px;",
-                            button {
-                                onclick: move |_| current_view.set(AppView::Dashboard),
-                                style: "padding: 10px 20px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;",
-                                "Dashboard"
-                            }
-                            button {
-                                disabled: true,
-                                style: "padding: 10px 20px; background: #ccc; color: #666; border: none; border-radius: 4px; cursor: default; font-size: 14px; font-weight: bold;",
-                                "Markets"
-                            }
-                            button {
-                                onclick: move |_| handle_logout(),
-                                style: "padding: 10px 20px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;",
-                                "Logout"
-                            }
-                        }
-                    }
+                    div {
+                        style: format!("max-width: 1400px; margin: 0 auto; padding: 30px 20px; font-family: {};", FONT_BODY),
 
-                    h2 { "Available Markets" }
-                    p { style: "color: #666; margin-bottom: 30px;", "Click on a market to start trading" }
+                        h1 {
+                            style: format!("margin: 0 0 10px 0; font-family: {}; color: {}; font-size: 32px;", FONT_HEADER, COLOR_DARK_GREY),
+                            "Markets"
+                        }
+                        p {
+                            style: format!("color: {}; margin: 0 0 30px 0; font-family: {};", COLOR_LIGHT_GREY, FONT_BODY),
+                            "Click on a market to start trading"
+                        }
 
-                    div { style: "display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px;",
-                        // BTC/USD Market
-                        div {
-                            onclick: move |_| current_view.set(AppView::Trading("BTC".to_string())),
-                            style: "background: white; padding: 20px; border-radius: 8px; border: 2px solid #ddd; cursor: pointer; transition: all 0.2s; hover: border-color: #2196F3;",
-                            div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;",
-                                h3 { style: "margin: 0; font-size: 24px;", "BTC/USD" }
-                                p { style: "margin: 0; font-size: 28px; font-weight: bold; color: #2196F3;", "${btc_price():.2}" }
-                            }
-                            p { style: "color: #666; font-size: 14px; margin-bottom: 15px;", "Bitcoin" }
-                            if !btc_history().is_empty() {
-                                div { style: "height: 120px; background: #f5f5f5; border-radius: 4px; display: flex; align-items: center; justify-content: center;",
+                        div { style: "display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 25px;",
+                            // BTC/USD Market
+                            div {
+                                onclick: move |_| current_view.set(AppView::Trading("BTC".to_string())),
+                                style: format!("background: {}; padding: 25px; border-radius: 8px; border: 2px solid #e0e0e0; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.05);", COLOR_CONTENT_BG),
+                                div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;",
+                                    h3 {
+                                        style: format!("margin: 0; font-size: 24px; font-family: {}; color: {};", FONT_HEADER, COLOR_DARK_GREY),
+                                        "BTC/USD"
+                                    }
+                                    p {
+                                        style: format!("margin: 0; font-size: 28px; font-weight: bold; color: {}; font-family: {};", COLOR_NAVY, FONT_HEADER),
+                                        "${btc_price():.2}"
+                                    }
+                                }
+                                p {
+                                    style: format!("color: {}; font-size: 14px; margin-bottom: 15px; font-family: {};", COLOR_LIGHT_GREY, FONT_BODY),
+                                    "Bitcoin"
+                                }
+                                if !btc_history().is_empty() {
+                                    div { style: format!("height: 120px; background: {}; border-radius: 4px; display: flex; align-items: center; justify-content: center;", COLOR_PAGE_BG),
                                     svg {
                                         width: "100%",
                                         height: "100",
@@ -1908,35 +2439,45 @@ fn App() -> Element {
                                                 }
                                             }
 
-                                            rsx! {
-                                                path {
-                                                    d: "{path}",
-                                                    fill: "none",
-                                                    stroke: "#2196F3",
-                                                    stroke_width: "2"
+                                                rsx! {
+                                                    path {
+                                                        d: "{path}",
+                                                        fill: "none",
+                                                        stroke: "#2196F3",
+                                                        stroke_width: "2"
+                                                    }
                                                 }
                                             }
                                         }
                                     }
-                                }
-                            } else {
-                                div { style: "height: 120px; background: #f5f5f5; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #999;",
-                                    "Loading chart..."
+                                } else {
+                                    div {
+                                        style: format!("height: 120px; background: {}; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: {}; font-family: {};", COLOR_PAGE_BG, COLOR_LIGHT_GREY, FONT_BODY),
+                                        "Loading chart..."
+                                    }
                                 }
                             }
-                        }
 
-                        // ETH/USD Market
-                        div {
-                            onclick: move |_| current_view.set(AppView::Trading("ETH".to_string())),
-                            style: "background: white; padding: 20px; border-radius: 8px; border: 2px solid #ddd; cursor: pointer; transition: all 0.2s;",
-                            div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;",
-                                h3 { style: "margin: 0; font-size: 24px;", "ETH/USD" }
-                                p { style: "margin: 0; font-size: 28px; font-weight: bold; color: #9c27b0;", "${eth_price():.2}" }
-                            }
-                            p { style: "color: #666; font-size: 14px; margin-bottom: 15px;", "Ethereum" }
-                            if !eth_history().is_empty() {
-                                div { style: "height: 120px; background: #f5f5f5; border-radius: 4px; display: flex; align-items: center; justify-content: center;",
+                            // ETH/USD Market
+                            div {
+                                onclick: move |_| current_view.set(AppView::Trading("ETH".to_string())),
+                                style: format!("background: {}; padding: 25px; border-radius: 8px; border: 2px solid #e0e0e0; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.05);", COLOR_CONTENT_BG),
+                                div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;",
+                                    h3 {
+                                        style: format!("margin: 0; font-size: 24px; font-family: {}; color: {};", FONT_HEADER, COLOR_DARK_GREY),
+                                        "ETH/USD"
+                                    }
+                                    p {
+                                        style: format!("margin: 0; font-size: 28px; font-weight: bold; color: #9c27b0; font-family: {};", FONT_HEADER),
+                                        "${eth_price():.2}"
+                                    }
+                                }
+                                p {
+                                    style: format!("color: {}; font-size: 14px; margin-bottom: 15px; font-family: {};", COLOR_LIGHT_GREY, FONT_BODY),
+                                    "Ethereum"
+                                }
+                                if !eth_history().is_empty() {
+                                    div { style: format!("height: 120px; background: {}; border-radius: 4px; display: flex; align-items: center; justify-content: center;", COLOR_PAGE_BG),
                                     svg {
                                         width: "100%",
                                         height: "100",
@@ -1969,19 +2510,23 @@ fn App() -> Element {
                                         }
                                     }
                                 }
-                            } else {
-                                div { style: "height: 120px; background: #f5f5f5; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #999;",
-                                    "Loading chart..."
+                                } else {
+                                    div {
+                                        style: format!("height: 120px; background: {}; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: {}; font-family: {};", COLOR_PAGE_BG, COLOR_LIGHT_GREY, FONT_BODY),
+                                        "Loading chart..."
+                                    }
                                 }
                             }
-                        }
 
-                        // BTC/ETH Market (cross-pair)
-                        div {
-                            onclick: move |_| current_view.set(AppView::Trading("BTC/ETH".to_string())),
-                            style: "background: white; padding: 20px; border-radius: 8px; border: 2px solid #ddd; cursor: pointer; transition: all 0.2s;",
-                            div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;",
-                                h3 { style: "margin: 0; font-size: 24px;", "BTC/ETH" }
+                            // BTC/ETH Market (cross-pair)
+                            div {
+                                onclick: move |_| current_view.set(AppView::Trading("BTC/ETH".to_string())),
+                                style: format!("background: {}; padding: 25px; border-radius: 8px; border: 2px solid #e0e0e0; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.05);", COLOR_CONTENT_BG),
+                                div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;",
+                                    h3 {
+                                        style: format!("margin: 0; font-size: 24px; font-family: {}; color: {};", FONT_HEADER, COLOR_DARK_GREY),
+                                        "BTC/ETH"
+                                    }
                                 {
                                     let btc = btc_price();
                                     let eth = eth_price();
@@ -1991,18 +2536,22 @@ fn App() -> Element {
                                         0.0
                                     };
 
-                                    rsx! {
-                                        p { style: "margin: 0; font-size: 28px; font-weight: bold; color: #ff9800;",
-                                            if cross_price > 0.0 {
-                                                "{cross_price:.4} ETH"
-                                            } else {
-                                                "--"
+                                        rsx! {
+                                            p {
+                                                style: format!("margin: 0; font-size: 28px; font-weight: bold; color: #ff9800; font-family: {};", FONT_HEADER),
+                                                if cross_price > 0.0 {
+                                                    "{cross_price:.4} ETH"
+                                                } else {
+                                                    "--"
+                                                }
                                             }
                                         }
                                     }
                                 }
-                            }
-                            p { style: "color: #666; font-size: 14px; margin-bottom: 15px;", "Bitcoin per Ethereum" }
+                                p {
+                                    style: format!("color: {}; font-size: 14px; margin-bottom: 15px; font-family: {};", COLOR_LIGHT_GREY, FONT_BODY),
+                                    "Bitcoin per Ethereum"
+                                }
                             {
                                 // Calculate BTC/ETH historical data
                                 let btc_hist = btc_history();
@@ -2020,9 +2569,9 @@ fn App() -> Element {
                                     }
                                 }
 
-                                if !cross_history.is_empty() {
-                                    rsx! {
-                                        div { style: "height: 120px; background: #f5f5f5; border-radius: 4px; display: flex; align-items: center; justify-content: center;",
+                                    if !cross_history.is_empty() {
+                                        rsx! {
+                                            div { style: format!("height: 120px; background: {}; border-radius: 4px; display: flex; align-items: center; justify-content: center;", COLOR_PAGE_BG),
                                             svg {
                                                 width: "100%",
                                                 height: "100",
@@ -2056,10 +2605,12 @@ fn App() -> Element {
                                             }
                                         }
                                     }
-                                } else {
-                                    rsx! {
-                                        div { style: "height: 120px; background: #f5f5f5; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #999;",
-                                            "Loading chart..."
+                                    } else {
+                                        rsx! {
+                                            div {
+                                                style: format!("height: 120px; background: {}; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: {}; font-family: {};", COLOR_PAGE_BG, COLOR_LIGHT_GREY, FONT_BODY),
+                                                "Loading chart..."
+                                            }
                                         }
                                     }
                                 }
@@ -2100,48 +2651,35 @@ fn App() -> Element {
                         };
 
                         rsx! {
-                            div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;",
+                            div {
+                                style: format!("max-width: 1400px; margin: 0 auto; padding: 30px 20px; font-family: {};", FONT_BODY),
+
+                                // Price display card
                                 div {
-                                    h1 { style: "margin: 0;", "🚀 Trading Simulator - {base_asset}/{quote_asset}" }
-                                    p { style: "color: #666; margin: 5px 0 0 0;", "Logged in as: {username}" }
-                                }
-                                div { style: "display: flex; gap: 10px;",
-                                    button {
-                                        onclick: move |_| current_view.set(AppView::Markets),
-                                        style: "padding: 10px 20px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;",
-                                        "← Markets"
+                                    style: format!("background: {}; padding: 25px; border-radius: 8px; margin-bottom: 25px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);", COLOR_CONTENT_BG),
+                                    h1 {
+                                        style: format!("margin: 0 0 10px 0; font-family: {}; color: {}; font-size: 28px;", FONT_HEADER, COLOR_DARK_GREY),
+                                        "{base_asset}/{quote_asset}"
                                     }
-                                    button {
-                                        onclick: move |_| current_view.set(AppView::Dashboard),
-                                        style: "padding: 10px 20px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;",
-                                        "Dashboard"
-                                    }
-                                    button {
-                                        onclick: move |_| handle_logout(),
-                                        style: "padding: 10px 20px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;",
-                                        "Logout"
+                                    p {
+                                        style: format!("margin: 0; font-size: 36px; font-weight: bold; color: {}; font-family: {};", COLOR_NAVY, FONT_HEADER),
+                                        if quote_asset == "USD" {
+                                            "${current_price:.2}"
+                                        } else {
+                                            "{current_price:.4} {quote_asset}"
+                                        }
                                     }
                                 }
-                            }
 
-                            div { class: "price-display",
-                                style: "background: #f0f0f0; padding: 20px; border-radius: 8px; margin: 20px 0;",
-                                h2 { "{base_asset}/{quote_asset} Price" }
-                                p { style: "font-size: 32px; font-weight: bold;",
-                                    if quote_asset == "USD" {
-                                        "${current_price:.2}"
-                                    } else {
-                                        "{current_price:.4} {quote_asset}"
-                                    }
-                                }
-                            }
-
-                            // Price Chart (shows base asset price history)
-                            div { class: "price-chart",
-                                style: "background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #ddd;",
-                                div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;",
-                                    h2 { style: "margin: 0;", "{base_asset} Price History" }
-                                    div { style: "display: flex; gap: 15px; align-items: center;",
+                                // Price Chart (shows base asset price history)
+                                div {
+                                    style: format!("background: {}; padding: 25px; border-radius: 8px; margin-bottom: 25px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);", COLOR_CONTENT_BG),
+                                    div { style: "display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;",
+                                        h2 {
+                                            style: format!("margin: 0; font-family: {}; color: {}; font-size: 24px;", FONT_HEADER, COLOR_DARK_GREY),
+                                            "{base_asset} Price History"
+                                        }
+                                        div { style: "display: flex; gap: 15px; align-items: center;",
                                         // Chart type toggle
                                         div { style: "display: flex; gap: 4px; border: 1px solid #ddd; border-radius: 4px; overflow: hidden;",
                                             button {
@@ -2214,8 +2752,9 @@ fn App() -> Element {
                                         }
                                     }
                                 }
+                            }
 
-                                // Render chart based on chart type
+                                    // Render chart based on chart type
                                 if chart_type() == "candlestick" {
                                     if !candle_history().is_empty() {
                                         CandlestickChart {
@@ -2553,6 +3092,61 @@ fn App() -> Element {
                             }
                         }
                     }
+                },
+                AppView::About => rsx! {
+                    div {
+                        style: format!("max-width: 1200px; margin: 0 auto; padding: 40px 20px; font-family: {};", FONT_BODY),
+                        div {
+                            style: format!("background: {}; padding: 40px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);", COLOR_CONTENT_BG),
+                            h1 {
+                                style: format!("margin: 0 0 20px 0; font-family: {}; color: {}; font-size: 36px;", FONT_HEADER, COLOR_DARK_GREY),
+                                "About Trading Simulator"
+                            }
+                            p {
+                                style: format!("font-size: 16px; line-height: 1.6; color: {}; margin-bottom: 15px;", COLOR_DARK_GREY),
+                                "Trading Simulator is a comprehensive paper trading platform built entirely in Rust, designed to help users practice trading strategies without risking real capital."
+                            }
+                            p {
+                                style: format!("font-size: 16px; line-height: 1.6; color: {}; margin-bottom: 15px;", COLOR_DARK_GREY),
+                                "The application features real-time price data from Coinbase, support for multiple trading pairs (BTC/USD, ETH/USD, BTC/ETH), advanced charting with technical indicators (SMA, EMA, RSI), and automated trading bot strategies."
+                            }
+                            h2 {
+                                style: format!("margin: 30px 0 15px 0; font-family: {}; color: {}; font-size: 24px;", FONT_HEADER, COLOR_DARK_GREY),
+                                "Features"
+                            }
+                            ul {
+                                style: format!("font-size: 16px; line-height: 1.8; color: {}; margin-left: 20px;", COLOR_DARK_GREY),
+                                li { "Real-time cryptocurrency price tracking" }
+                                li { "Multi-asset portfolio management" }
+                                li { "Advanced charting (line and candlestick views)" }
+                                li { "Technical indicators (SMA, EMA, RSI)" }
+                                li { "Automated trading bots" }
+                                li { "Complete transaction history" }
+                                li { "Lifetime statistics and analytics" }
+                            }
+                            h2 {
+                                style: format!("margin: 30px 0 15px 0; font-family: {}; color: {}; font-size: 24px;", FONT_HEADER, COLOR_DARK_GREY),
+                                "Technology Stack"
+                            }
+                            p {
+                                style: format!("font-size: 16px; line-height: 1.6; color: {}; margin-bottom: 15px;", COLOR_DARK_GREY),
+                                "Built with Rust using Axum for the backend API, SQLite for persistent storage, and Dioxus for the frontend interface. The application is containerized with Docker for easy deployment."
+                            }
+                            p {
+                                style: format!("font-size: 14px; margin-top: 40px; color: {}; font-style: italic;", COLOR_LIGHT_GREY),
+                                "© 2025 Trading Simulator. Built with Rust."
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+            // Status bar (only show when not on Auth page)
+            if !matches!(current_view(), AppView::Auth) {
+                StatusBar {
+                    username: username(),
+                    bot_status: bot_status()
                 }
             }
         }
