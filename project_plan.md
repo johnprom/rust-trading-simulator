@@ -136,7 +136,10 @@
   - ✅ Hover tooltip showing OHLC data
 
 **Advanced Chart Enhancements**
-- [ ] Technical indicators (MA, RSI, MACD)
+- [ ] Technical indicators (SMA_20, SMA_50) - feature only enabled for 1h (5-second) window
+- [ ] Technical indicators (EMA_12, EMA_26) - feature only enabled for 1h (5-second) window
+- [ ] Technical indicators (RSI_14) and Panel - feature only enabled for 1h (5-second) window
+- [ ] (lower priority) Technical indicators (MACD) - feature only enabled for 1h (5-second) window
 
 **Frontend Improvements**
 - [ ] Landing page

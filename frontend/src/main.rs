@@ -60,6 +60,8 @@ struct PriceChartProps {
     prices: Vec<PricePoint>,
     quote_asset: String,
     timeframe: String, // "1h", "8h", or "24h"
+    #[props(optional)]
+    indicator_data: Option<IndicatorResponse>,
 }
 
 #[derive(Clone, PartialEq, Props)]
@@ -67,12 +69,23 @@ struct CandlestickChartProps {
     candles: Vec<Candle>,
     quote_asset: String,
     timeframe: String,
+    #[props(optional)]
+    indicator_data: Option<IndicatorResponse>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 struct PriceHistoryResponse {
     asset: String,
     prices: Vec<PricePoint>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+struct IndicatorResponse {
+    asset: String,
+    timeframe: String,
+    timestamps: Vec<i64>,
+    prices: Vec<f64>,
+    indicators: HashMap<String, Vec<Option<f64>>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
@@ -202,6 +215,13 @@ fn PriceChart(props: PriceChartProps) -> Element {
     // Clone props data to satisfy lifetime requirements for event handlers
     let prices = props.prices.clone();
     let quote_asset = props.quote_asset.clone();
+
+    // Debug: Log if we have indicator data
+    if let Some(ref ind_data) = props.indicator_data {
+        web_sys::console::log_1(&format!("PriceChart received indicators: {:?}", ind_data.indicators.keys().collect::<Vec<_>>()).into());
+    } else {
+        web_sys::console::log_1(&"PriceChart: No indicator data".into());
+    }
 
     if prices.is_empty() {
         return rsx! { p { "No data available" } };
@@ -375,6 +395,125 @@ fn PriceChart(props: PriceChartProps) -> Element {
                     fill: "none",
                     stroke: "#2196F3",
                     stroke_width: "2",
+                }
+
+                // Indicator overlays (SMA/EMA)
+                if let Some(ref indicators) = props.indicator_data {
+                    // SMA(20) overlay - Orange
+                    if let Some(sma_20) = indicators.indicators.get("sma_20") {
+                        {
+                            let mut sma_path = String::from("M ");
+                            let mut first_valid = true;
+                            for (i, value_opt) in sma_20.iter().enumerate() {
+                                if let Some(value) = value_opt {
+                                    let x = padding_left + (i as f64 / (sma_20.len() - 1) as f64) * (width - padding_left - padding_right);
+                                    let y = height - padding_bottom - ((value - min_price) / price_range) * (height - padding_top - padding_bottom);
+                                    if first_valid {
+                                        sma_path.push_str(&format!("{} {} ", x, y));
+                                        first_valid = false;
+                                    } else {
+                                        sma_path.push_str(&format!("L {} {} ", x, y));
+                                    }
+                                }
+                            }
+                            rsx! {
+                                path {
+                                    d: "{sma_path}",
+                                    fill: "none",
+                                    stroke: "#FF9800",
+                                    stroke_width: "2",
+                                    opacity: "0.8"
+                                }
+                            }
+                        }
+                    }
+
+                    // SMA(50) overlay - Purple
+                    if let Some(sma_50) = indicators.indicators.get("sma_50") {
+                        {
+                            let mut sma_path = String::from("M ");
+                            let mut first_valid = true;
+                            for (i, value_opt) in sma_50.iter().enumerate() {
+                                if let Some(value) = value_opt {
+                                    let x = padding_left + (i as f64 / (sma_50.len() - 1) as f64) * (width - padding_left - padding_right);
+                                    let y = height - padding_bottom - ((value - min_price) / price_range) * (height - padding_top - padding_bottom);
+                                    if first_valid {
+                                        sma_path.push_str(&format!("{} {} ", x, y));
+                                        first_valid = false;
+                                    } else {
+                                        sma_path.push_str(&format!("L {} {} ", x, y));
+                                    }
+                                }
+                            }
+                            rsx! {
+                                path {
+                                    d: "{sma_path}",
+                                    fill: "none",
+                                    stroke: "#9C27B0",
+                                    stroke_width: "2",
+                                    opacity: "0.8"
+                                }
+                            }
+                        }
+                    }
+
+                    // EMA(12) overlay - Teal
+                    if let Some(ema_12) = indicators.indicators.get("ema_12") {
+                        {
+                            let mut ema_path = String::from("M ");
+                            let mut first_valid = true;
+                            for (i, value_opt) in ema_12.iter().enumerate() {
+                                if let Some(value) = value_opt {
+                                    let x = padding_left + (i as f64 / (ema_12.len() - 1) as f64) * (width - padding_left - padding_right);
+                                    let y = height - padding_bottom - ((value - min_price) / price_range) * (height - padding_top - padding_bottom);
+                                    if first_valid {
+                                        ema_path.push_str(&format!("{} {} ", x, y));
+                                        first_valid = false;
+                                    } else {
+                                        ema_path.push_str(&format!("L {} {} ", x, y));
+                                    }
+                                }
+                            }
+                            rsx! {
+                                path {
+                                    d: "{ema_path}",
+                                    fill: "none",
+                                    stroke: "#009688",
+                                    stroke_width: "2",
+                                    opacity: "0.8"
+                                }
+                            }
+                        }
+                    }
+
+                    // EMA(26) overlay - Deep Orange
+                    if let Some(ema_26) = indicators.indicators.get("ema_26") {
+                        {
+                            let mut ema_path = String::from("M ");
+                            let mut first_valid = true;
+                            for (i, value_opt) in ema_26.iter().enumerate() {
+                                if let Some(value) = value_opt {
+                                    let x = padding_left + (i as f64 / (ema_26.len() - 1) as f64) * (width - padding_left - padding_right);
+                                    let y = height - padding_bottom - ((value - min_price) / price_range) * (height - padding_top - padding_bottom);
+                                    if first_valid {
+                                        ema_path.push_str(&format!("{} {} ", x, y));
+                                        first_valid = false;
+                                    } else {
+                                        ema_path.push_str(&format!("L {} {} ", x, y));
+                                    }
+                                }
+                            }
+                            rsx! {
+                                path {
+                                    d: "{ema_path}",
+                                    fill: "none",
+                                    stroke: "#FF5722",
+                                    stroke_width: "2",
+                                    opacity: "0.8"
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // Crosshair lines
@@ -654,6 +793,13 @@ fn App() -> Element {
     let mut chart_type = use_signal(|| String::from("line")); // "line" or "candlestick"
     let mut candle_history = use_signal(|| Vec::<Candle>::new());
 
+    // Indicator state
+    let mut indicator_data = use_signal(|| None::<IndicatorResponse>);
+    let mut show_sma_20 = use_signal(|| false);
+    let mut show_sma_50 = use_signal(|| false);
+    let mut show_ema_12 = use_signal(|| false);
+    let mut show_ema_26 = use_signal(|| false);
+
     // Fetch BTC price on mount and every 5 seconds
     use_effect(move || {
         spawn(async move {
@@ -764,6 +910,66 @@ fn App() -> Element {
         });
     };
 
+    // Fetch indicator data for the selected market
+    let mut fetch_indicators = move |asset: &str| {
+        let timeframe = selected_timeframe();
+
+        // Only fetch if timeframe is 1h (indicators only supported for 1h)
+        if timeframe != "1h" {
+            indicator_data.set(None);
+            return;
+        }
+
+        // Build indicators list based on toggles
+        let mut indicators = Vec::new();
+        if show_sma_20() {
+            indicators.push("sma_20");
+        }
+        if show_sma_50() {
+            indicators.push("sma_50");
+        }
+        if show_ema_12() {
+            indicators.push("ema_12");
+        }
+        if show_ema_26() {
+            indicators.push("ema_26");
+        }
+
+        // If no indicators selected, clear data
+        if indicators.is_empty() {
+            indicator_data.set(None);
+            return;
+        }
+
+        let indicators_param = indicators.join(",");
+        let asset = asset.to_string();
+
+        spawn(async move {
+            let url = format!(
+                "{}/indicators?asset={}&timeframe={}&indicators={}",
+                API_BASE, asset, timeframe, indicators_param
+            );
+            web_sys::console::log_1(&format!("Fetching indicators: {}", url).into());
+            match reqwest::get(&url).await {
+                Ok(resp) => {
+                    web_sys::console::log_1(&format!("Response status: {}", resp.status()).into());
+                    match resp.json::<IndicatorResponse>().await {
+                        Ok(data) => {
+                            web_sys::console::log_1(&format!("Received indicator data with {} indicators", data.indicators.len()).into());
+                            indicator_data.set(Some(data));
+                        }
+                        Err(e) => {
+                            web_sys::console::log_1(&format!("Failed to parse indicator response: {:?}", e).into());
+                        }
+                    }
+                }
+                Err(e) => {
+                    web_sys::console::log_1(&format!("Failed to fetch indicators: {:?}", e).into());
+                }
+            }
+        });
+    };
+
     // Re-fetch candle data when timeframe changes (only when in candlestick mode)
     use_effect(move || {
         let timeframe = selected_timeframe();
@@ -819,6 +1025,26 @@ fn App() -> Element {
                 }
             }
         });
+    });
+
+    // Fetch indicators when toggles or timeframe changes
+    use_effect(move || {
+        let (_tf, _sma20, _sma50, _ema12, _ema26) = (
+            selected_timeframe(),
+            show_sma_20(),
+            show_sma_50(),
+            show_ema_12(),
+            show_ema_26()
+        );
+
+        if let AppView::Trading(asset) = &*current_view.peek() {
+            let base_asset = if asset.contains('/') {
+                asset.split('/').next().unwrap_or("BTC")
+            } else {
+                asset.as_str()
+            };
+            fetch_indicators(base_asset);
+        }
     });
 
     // Auth handlers
@@ -1878,13 +2104,15 @@ fn App() -> Element {
                                         }
                                     }
                                 }
+
                                 // Render chart based on chart type
                                 if chart_type() == "candlestick" {
                                     if !candle_history().is_empty() {
                                         CandlestickChart {
                                             candles: candle_history(),
                                             quote_asset: quote_asset.to_string(),
-                                            timeframe: selected_timeframe()
+                                            timeframe: selected_timeframe(),
+                                            indicator_data: indicator_data()
                                         }
                                     } else {
                                         p { style: "color: #666;", "Loading candlestick data..." }
@@ -1894,10 +2122,50 @@ fn App() -> Element {
                                         PriceChart {
                                             prices: current_history,
                                             quote_asset: quote_asset.to_string(),
-                                            timeframe: selected_timeframe()
+                                            timeframe: selected_timeframe(),
+                                            indicator_data: indicator_data()
                                         }
                                     } else {
                                         p { style: "color: #666;", "Loading price data..." }
+                                    }
+                                }
+
+                                // Indicator toggles (only for 1h view) - Below chart
+                                if selected_timeframe() == "1h" {
+                                    div { style: "display: flex; gap: 10px; align-items: center; margin-top: 15px; padding: 10px; background: #f9f9f9; border-radius: 4px;",
+                                        span { style: "font-size: 13px; color: #666; font-weight: bold;", "Indicators:" }
+                                        label { style: "display: flex; align-items: center; gap: 5px; cursor: pointer; font-size: 13px;",
+                                            input {
+                                                r#type: "checkbox",
+                                                checked: show_sma_20(),
+                                                onchange: move |_| show_sma_20.set(!show_sma_20())
+                                            }
+                                            "SMA(20)"
+                                        }
+                                        label { style: "display: flex; align-items: center; gap: 5px; cursor: pointer; font-size: 13px;",
+                                            input {
+                                                r#type: "checkbox",
+                                                checked: show_sma_50(),
+                                                onchange: move |_| show_sma_50.set(!show_sma_50())
+                                            }
+                                            "SMA(50)"
+                                        }
+                                        label { style: "display: flex; align-items: center; gap: 5px; cursor: pointer; font-size: 13px;",
+                                            input {
+                                                r#type: "checkbox",
+                                                checked: show_ema_12(),
+                                                onchange: move |_| show_ema_12.set(!show_ema_12())
+                                            }
+                                            "EMA(12)"
+                                        }
+                                        label { style: "display: flex; align-items: center; gap: 5px; cursor: pointer; font-size: 13px;",
+                                            input {
+                                                r#type: "checkbox",
+                                                checked: show_ema_26(),
+                                                onchange: move |_| show_ema_26.set(!show_ema_26())
+                                            }
+                                            "EMA(26)"
+                                        }
                                     }
                                 }
                             }

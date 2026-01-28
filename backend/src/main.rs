@@ -1,6 +1,7 @@
 mod api_client;
 mod bots;
 mod db;
+mod indicators;
 mod models;
 mod routes;
 mod services;
@@ -75,6 +76,7 @@ async fn main() {
         .route("/price", get(routes::price::get_price))
         .route("/price/history", get(routes::price::get_price_history))
         .route("/price/candles", get(routes::price::get_candle_history))
+        .route("/indicators", get(routes::indicators::get_indicators))
         .route("/portfolio", get(routes::portfolio::get_portfolio))
         .route("/trade", post(routes::trade::post_trade))
         .route("/deposit", post(routes::trade::post_deposit))
