@@ -188,13 +188,13 @@
 - [ ] Real-time bot status updates
 
 ## Backlog - Bugs and UI improvements
-- [ ] Update off white-color to F2F6FF
-- [ ] RSA plot should have brighter white background (like the other graphs) instead of off-white
-- [ ] Consolidate trading form and portfolio section in the trading view to be side-by-side, neither need that much horizontal space
-- [ ] Remove emojis, except for ones being used as icons such as pause/play
-- [ ] Either hide indicator overlay selection for candlestick graphs or fix it (does nothing on the candlestick graphs)
-- [ ] Momentum bot is named "Naive Momentum Bot" resulting in this "Status: Naive Momentum Bot Bot running in BTC/USD", should rename
-- [ ] Indicator div on trading view has a visible border, we should remove this
+- ✅ Update off white-color to FBFCF8 (pearl)
+- ✅ RSA plot should have brighter white background (like the other graphs) instead of off-white
+- ✅ Consolidate trading form and portfolio section in the trading view to be side-by-side, neither need that much horizontal space
+- ✅ Remove emojis, except for ones being used as icons such as pause/play
+- ✅ Hide indicator overlay selection for candlestick graphs
+- ✅ Momentum bot is named "Naive Momentum Bot" resulting in this "Status: Naive Momentum Bot Bot running in BTC/USD", should rename
+- ✅ Indicator div on trading view has a visible border, we should remove this
 
 ## Backlog - Features
 - [ ] (lower priority) Technical indicators (MACD) - feature only enabled for 1h (5-second) window

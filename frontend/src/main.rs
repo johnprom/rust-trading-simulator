@@ -203,7 +203,7 @@ const API_BASE: &str = "http://localhost:3000/api";
 
 // Color scheme constants
 const COLOR_NAVY: &str = "#1a237e";
-const COLOR_PAGE_BG: &str = "#e9eeff";
+const COLOR_PAGE_BG: &str = "#FBFCF8"; // #e9eeff
 const COLOR_CONTENT_BG: &str = "#fefefe";
 const COLOR_DARK_GREY: &str = "#424242";
 const COLOR_LIGHT_GREY: &str = "#757575";
@@ -744,7 +744,7 @@ fn CandlestickChart(props: CandlestickChartProps) -> Element {
             style: "position: relative;",
             div {
                 dangerous_inner_html: format!(
-                    "<svg width=\"{}\" height=\"{}\" viewBox=\"0 0 {} {}\" style=\"display: block; margin: 0 auto; background: white;\"><rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"#fafafa\"/>{}</svg>",
+                    "<svg width=\"{}\" height=\"{}\" viewBox=\"0 0 {} {}\" style=\"display: block; margin: 0 auto; background: white;\"><rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"#fefefe\"/>{}</svg>",
                     width, height, width, height,
                     padding_left, padding_top,
                     width - padding_left - padding_right,
@@ -832,7 +832,7 @@ fn RSIPanel(props: RSIPanelProps) -> Element {
             padding_left - 5.0, y + 4.0, val as i32
         ));
         svg_elements.push_str(&format!(
-            "<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"#ddd\" stroke-width=\"1\"/>",
+            "<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"#969696\" stroke-width=\"1\"/>",
             padding_left, y, width - padding_right, y
         ));
     }
@@ -868,7 +868,7 @@ fn RSIPanel(props: RSIPanelProps) -> Element {
             style: "margin-top: 20px;",
             div {
                 dangerous_inner_html: format!(
-                    "<svg width=\"{}\" height=\"{}\" viewBox=\"0 0 {} {}\" style=\"display: block; margin: 0 auto; background: white;\"><rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"#fafafa\"/>{}</svg>",
+                    "<svg width=\"{}\" height=\"{}\" viewBox=\"0 0 {} {}\" style=\"display: block; margin: 0 auto; background: white;\"><rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"#fefefe\"/>{}</svg>",
                     width, height, width, height,
                     padding_left, padding_top,
                     width - padding_left - padding_right,
@@ -1926,7 +1926,7 @@ fn App() -> Element {
                                 div {
                                     style: format!("flex: 1; min-width: 300px; color: white; font-family: {};", FONT_HEADER),
                                     h1 {
-                                        style: "font-size: 64px; font-weight: 700; margin: 0 0 20px 0; line-height: 1.2;",
+                                        style: "font-size: 64px; font-weight: 700; margin: 0 0 10px 0; line-height: 1.2;",
                                         "Trading"
                                     }
                                     h1 {
@@ -1935,11 +1935,15 @@ fn App() -> Element {
                                     }
                                     p {
                                         style: "font-size: 16px; opacity: 0.8; margin: 0;",
-                                        "Built with Rust"
+                                        "John Prominski"
                                     }
                                     p {
                                         style: "font-size: 16px; opacity: 0.8; margin: 5px 0 0 0;",
                                         "2025"
+                                    }
+                                    p {
+                                        style: "font-size: 16px; opacity: 0.8; margin: 5px 0 0 0;",
+                                        "Full-stack Rust Project"
                                     }
                                 }
 
@@ -2359,11 +2363,9 @@ fn App() -> Element {
                                                     td {
                                                         style: "padding: 10px; text-align: center;",
                                                         {
-                                                            if let Some(bot_name) = &trade.executed_by_bot {
-                                                                format!("🤖 {}", bot_name)
-                                                            } else {
-                                                                "Manual".to_string()
-                                                            }
+                                                            trade.executed_by_bot
+                                                                .as_deref()
+                                                                .unwrap_or("Manual")
                                                         }
                                                     }
                                                     td { style: "padding: 10px;", "{format_timestamp(&trade.timestamp)}" }
@@ -2790,9 +2792,10 @@ fn App() -> Element {
                                         }
                                     }
 
-                                    // Indicator toggles (only for 1h view) - Below chart
-                                    if selected_timeframe() == "1h" {
-                                        div { style: format!("display: flex; gap: 10px; align-items: center; margin-top: 15px; padding: 10px; background: {}; border-radius: 4px; border-top: 1px solid #e0e0e0;", COLOR_CONTENT_BG),
+                                    // Indicator toggles (only for 1h linechart view) - Below chart
+                                    if selected_timeframe() == "1h" && chart_type() != "candlestick" {
+                                        // div { style: format!("display: flex; gap: 10px; align-items: center; margin-top: 15px; padding: 10px; background: {}; border-radius: 4px; border-top: 1px solid #e0e0e0;", COLOR_CONTENT_BG),
+                                        div { style: format!("display: flex; gap: 10px; align-items: center; margin-top: 15px; padding: 10px; background: {}; border-radius: 4px", COLOR_CONTENT_BG),
                                             span { style: format!("font-size: 13px; color: {}; font-weight: bold;", COLOR_DARK_GREY), "Indicators:" }
                                             label { style: "display: flex; align-items: center; gap: 5px; cursor: pointer; font-size: 13px;",
                                                 input {
@@ -2838,89 +2841,93 @@ fn App() -> Element {
                                     }
                                 }
 
-                            // Trade Form - moved before portfolio
-                            div { class: "trade-form",
-                                style: format!("background: {}; padding: 25px; border-radius: 8px; margin-bottom: 25px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);", COLOR_CONTENT_BG),
-                                h2 { style: format!("margin-top: 0; font-family: {}; color: {};", FONT_HEADER, COLOR_DARK_GREY), "Trade {base_asset}/{quote_asset}" }
+                            // Trade Form and Portfolio - side by side
+                            div { style: "display: grid; grid-template-columns: 1fr 1fr; gap: 25px; margin-bottom: 25px;",
 
-                                label { style: format!("display: block; margin-bottom: 5px; font-weight: bold; color: {};", COLOR_DARK_GREY), "Quantity ({base_asset}):" }
-                                input {
-                                    r#type: "number",
-                                    step: "0.001",
-                                    value: "{quantity}",
-                                    oninput: move |e| quantity.set(e.value()),
-                                    style: "margin: 10px 0; padding: 10px; width: 100%; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;",
-                                }
+                                // Trade Form
+                                div { class: "trade-form",
+                                    style: format!("background: {}; padding: 25px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);", COLOR_CONTENT_BG),
+                                    h2 { style: format!("margin-top: 0; font-family: {}; color: {};", FONT_HEADER, COLOR_DARK_GREY), "Trade {base_asset}/{quote_asset}" }
 
-                                div { style: "display: flex; gap: 10px; margin-top: 10px;",
-                                    button {
-                                        onclick: {
-                                            let base = base_asset.to_string();
-                                            let quote_opt = if quote_asset != "USD" {
-                                                Some(quote_asset.to_string())
-                                            } else {
-                                                None
-                                            };
-                                            move |_| execute_trade("Buy", &base, quote_opt.clone())
-                                        },
-                                        style: format!("flex: 1; padding: 12px; background: {}; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold;", COLOR_GREEN),
-                                        "Buy {base_asset}"
+                                    label { style: format!("display: block; margin-bottom: 5px; font-weight: bold; color: {};", COLOR_DARK_GREY), "Quantity ({base_asset}):" }
+                                    input {
+                                        r#type: "number",
+                                        step: "0.001",
+                                        value: "{quantity}",
+                                        oninput: move |e| quantity.set(e.value()),
+                                        style: "margin: 10px 0; padding: 10px; width: 90%; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;",
                                     }
-                                    button {
-                                        onclick: {
-                                            let base = base_asset.to_string();
-                                            let quote_opt = if quote_asset != "USD" {
-                                                Some(quote_asset.to_string())
-                                            } else {
-                                                None
-                                            };
-                                            move |_| execute_trade("Sell", &base, quote_opt.clone())
-                                        },
-                                        style: format!("flex: 1; padding: 12px; background: {}; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold;", COLOR_RED),
-                                        "Sell {base_asset}"
-                                    }
-                                }
 
-                                if !status().is_empty() {
-                                    p { style: format!("margin-top: 10px; color: {};", COLOR_LIGHT_GREY), "{status}" }
-                                }
-                            }
-
-                            // Portfolio - moved after trade form
-                            if let Some(p) = portfolio() {
-                                div { class: "portfolio",
-                                    style: format!("background: {}; padding: 25px; border-radius: 8px; margin-bottom: 25px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);", COLOR_CONTENT_BG),
-                                    h2 { style: format!("margin-top: 0; font-family: {}; color: {};", FONT_HEADER, COLOR_DARK_GREY), "Portfolio" }
-                                    {
-                                        // Calculate total portfolio value in USD
-                                        let mut total_value_usd = 0.0;
-                                        for (asset, balance) in p.asset_balances.iter() {
-                                            if asset == "USD" {
-                                                total_value_usd += balance;
-                                            } else if asset == "BTC" {
-                                                total_value_usd += balance * btc_price();
-                                            } else if asset == "ETH" {
-                                                total_value_usd += balance * eth_price();
-                                            }
-                                        }
-
-                                        let base_balance = p.asset_balances.get(base_asset).copied().unwrap_or(0.0);
-                                        let quote_balance = p.asset_balances.get(quote_asset).copied().unwrap_or(0.0);
-
-                                        rsx! {
-                                            p { style: format!("font-size: 18px; font-weight: bold; margin-bottom: 15px; color: {};", COLOR_DARK_GREY),
-                                                "Estimated Total Value: ${total_value_usd:.2}"
-                                            }
-                                            {
-                                                if quote_asset == "USD" {
-                                                    rsx! {
-                                                        p { style: format!("font-size: 16px; margin: 5px 0; color: {};", COLOR_DARK_GREY), "USD: ${quote_balance:.2}" }
-                                                        p { style: format!("font-size: 16px; margin: 5px 0; color: {};", COLOR_DARK_GREY), "{base_asset}: {base_balance:.8}" }
-                                                    }
+                                    div { style: "display: flex; gap: 10px; margin-top: 10px;",
+                                        button {
+                                            onclick: {
+                                                let base = base_asset.to_string();
+                                                let quote_opt = if quote_asset != "USD" {
+                                                    Some(quote_asset.to_string())
                                                 } else {
-                                                    rsx! {
-                                                        p { style: format!("font-size: 16px; margin: 5px 0; color: {};", COLOR_DARK_GREY), "{base_asset}: {base_balance:.8}" }
-                                                        p { style: format!("font-size: 16px; margin: 5px 0; color: {};", COLOR_DARK_GREY), "{quote_asset}: {quote_balance:.8}" }
+                                                    None
+                                                };
+                                                move |_| execute_trade("Buy", &base, quote_opt.clone())
+                                            },
+                                            style: format!("flex: 1; padding: 12px; background: {}; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold;", COLOR_GREEN),
+                                            "Buy {base_asset}"
+                                        }
+                                        button {
+                                            onclick: {
+                                                let base = base_asset.to_string();
+                                                let quote_opt = if quote_asset != "USD" {
+                                                    Some(quote_asset.to_string())
+                                                } else {
+                                                    None
+                                                };
+                                                move |_| execute_trade("Sell", &base, quote_opt.clone())
+                                            },
+                                            style: format!("flex: 1; padding: 12px; background: {}; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold;", COLOR_RED),
+                                            "Sell {base_asset}"
+                                        }
+                                    }
+
+                                    if !status().is_empty() {
+                                        p { style: format!("margin-top: 10px; color: {};", COLOR_LIGHT_GREY), "{status}" }
+                                    }
+                                }
+
+                                // Portfolio
+                                if let Some(p) = portfolio() {
+                                    div { class: "portfolio",
+                                        style: format!("background: {}; padding: 25px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);", COLOR_CONTENT_BG),
+                                        h2 { style: format!("margin-top: 0; font-family: {}; color: {};", FONT_HEADER, COLOR_DARK_GREY), "Portfolio" }
+                                        {
+                                            // Calculate total portfolio value in USD
+                                            let mut total_value_usd = 0.0;
+                                            for (asset, balance) in p.asset_balances.iter() {
+                                                if asset == "USD" {
+                                                    total_value_usd += balance;
+                                                } else if asset == "BTC" {
+                                                    total_value_usd += balance * btc_price();
+                                                } else if asset == "ETH" {
+                                                    total_value_usd += balance * eth_price();
+                                                }
+                                            }
+
+                                            let base_balance = p.asset_balances.get(base_asset).copied().unwrap_or(0.0);
+                                            let quote_balance = p.asset_balances.get(quote_asset).copied().unwrap_or(0.0);
+
+                                            rsx! {
+                                                p { style: format!("font-size: 18px; font-weight: bold; margin-bottom: 15px; color: {};", COLOR_DARK_GREY),
+                                                    "Estimated Total Value: ${total_value_usd:.2}"
+                                                }
+                                                {
+                                                    if quote_asset == "USD" {
+                                                        rsx! {
+                                                            p { style: format!("font-size: 16px; margin: 5px 0; color: {};", COLOR_DARK_GREY), "USD: ${quote_balance:.2}" }
+                                                            p { style: format!("font-size: 16px; margin: 5px 0; color: {};", COLOR_DARK_GREY), "{base_asset}: {base_balance:.8}" }
+                                                        }
+                                                    } else {
+                                                        rsx! {
+                                                            p { style: format!("font-size: 16px; margin: 5px 0; color: {};", COLOR_DARK_GREY), "{base_asset}: {base_balance:.8}" }
+                                                            p { style: format!("font-size: 16px; margin: 5px 0; color: {};", COLOR_DARK_GREY), "{quote_asset}: {quote_balance:.8}" }
+                                                        }
                                                     }
                                                 }
                                             }
@@ -2981,7 +2988,7 @@ fn App() -> Element {
                                                 step: "100",
                                                 value: "{bot_stoploss}",
                                                 oninput: move |e| bot_stoploss.set(e.value()),
-                                                style: "width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;",
+                                                style: "width: 90%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;",
                                             }
                                             p { style: format!("margin: 5px 0 0 0; font-size: 12px; color: {};", COLOR_LIGHT_GREY), "Maximum loss before bot stops (step size will be 1% of this)" }
                                         }
@@ -3136,7 +3143,11 @@ fn App() -> Element {
                             }
                             p {
                                 style: format!("font-size: 14px; margin-top: 40px; color: {}; font-style: italic;", COLOR_LIGHT_GREY),
-                                "© 2025 Trading Simulator. Built with Rust."
+                                "Trading Simulator by John Prominski - 2025"
+                            }
+                            p {
+                                style: format!("font-size: 14px; margin-top: 40px; color: {}; font-style: italic;", COLOR_LIGHT_GREY),
+                                "Full-stack Rust Application"
                             }
                         }
                     }
@@ -3158,16 +3169,3 @@ fn App() -> Element {
 fn main() {
     launch(App);
 }
-
-// use dioxus::prelude::*;
-// use dioxus::launch;
-
-// fn app() -> Element {
-//     rsx! {
-//         div { "Hello dioxus world!" }
-//     }
-// }
-
-// fn main() {
-//     launch(app);
-// }

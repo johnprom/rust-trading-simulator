@@ -95,7 +95,7 @@ impl TradingBot for NaiveMomentumBot {
     }
 
     fn name(&self) -> &str {
-        "Naive Momentum Bot"
+        "Naive Momentum"
     }
 }
 
