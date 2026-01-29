@@ -155,32 +155,51 @@
   - ✅ Purple (#9C27B0) color scheme for RSI line
 
 **Frontend Improvements**
-- [ ] Improved styling and responsive design
-  - use financial colors: off-white shade for page backing, lighter shade for content backing, dark grey and navy for accents (buy/sell green/red and color coding for graphs can be exempt)
-  - use no more than 2 professional looking fonts (the existing one on the login page and market labels is good to keep)
-  - the landing page can be a different color (navy) and two elements one before the other such that on a wider preview the text is to the left: (1) Large left centered text saying "Trading \n Simulator" towrads the top and smaller text with credits towards the bottom (2) the existing login component
-  - the header should have its own distinct block in navy (text to left and navigation on right) 
-  - the "logged in as: User" info should be in a block pinned to the bottom of page also in a different color (maybe grey) also in this block we should have a bot status info which help indicate if and which bot is running currently even if you are not looking at the trading view
-- [ ] Enhanced dashboard design
- - Portfolio element should have 3 components (side by side) (1) estimated total value and avaiable cash (2) a simple list of all asset balances (including USD) (3) a pie chart giving a breakdown of the portfolio composition
- - the forms for account funding (deposit/widthdraw forms) should be separate and below the lifetime statistics. Further the form should be expandable down from a simple section that says "Fund account or make withdrawl"
+- ✅ Improved styling and responsive design
+  - ✅ Financial color scheme: #e9eeff page backing, #fefefe content backing, #424242 dark grey, #1a237e navy, #757575 light grey
+  - ✅ Typography: Inter font for headers, system fonts for body text
+  - ✅ Landing page: Navy background with two-column responsive layout (branding left, login right)
+  - ✅ Header component: Navy background with "Trading Simulator" title and dropdown navigation (Dashboard/Markets/About/Logout)
+  - ✅ Status bar: Fixed bottom bar showing logged-in user and bot status across all views
+- ✅ Enhanced dashboard design
+  - ✅ 3-column portfolio grid: (1) Total value & available cash (2) Asset balances list (3) Pie chart composition
+  - ✅ Expandable deposit/withdrawal forms below lifetime statistics
+  - ✅ Consistent neutral color scheme with box shadows and rounded corners
+- ✅ Markets view refinement
+  - ✅ Updated to use new color scheme
+  - ✅ Removed old navigation (moved to header)
+  - ✅ Market cards with neutral colors and consistent styling
+- ✅ Trading view refinement
+  - ✅ Horizontal market/price display (left/right layout)
+  - ✅ Consolidated chart section (time controls, graph, indicators in one white div)
+  - ✅ Blue-tinted page background (#e9eeff)
+  - ✅ Neutral colors for all forms (portfolio, trade, bot controls)
+  - ✅ Reordered: Trade form before portfolio section
+  - ✅ Updated table formatting with consistent colors
+- ✅ About page
+  - ✅ Professional layout with project description, features, and tech stack
 ---
 
-## Phase 5 – Real-time Features & Advanced Features
-
-**Real-time Features**
-- [ ] WebSocket support for live updates
-- [ ] Live price streaming
-- [ ] Real-time bot status updates
+## Phase 5 – Implement New Bot Strategies
 
 **Bot Strategies**
 - [ ] Additional bot strategies (MA crossover, RSI-based, etc.)
 - [ ] Bot performance metrics and comparison
+- [ ] Real-time bot status updates
 
-## Phase 6 - nice to haves and future improvements
+## Backlog - Bugs and UI improvements
+- [ ] Update off white-color to F2F6FF
+- [ ] RSA plot should have brighter white background (like the other graphs) instead of off-white
+- [ ] Consolidate trading form and portfolio section in the trading view to be side-by-side, neither need that much horizontal space
+- [ ] Remove emojis, except for ones being used as icons such as pause/play
+- [ ] Either hide indicator overlay selection for candlestick graphs or fix it (does nothing on the candlestick graphs)
+- [ ] Momentum bot is named "Naive Momentum Bot" resulting in this "Status: Naive Momentum Bot Bot running in BTC/USD", should rename
+- [ ] Indicator div on trading view has a visible border, we should remove this
 
-**Additional Features**
+## Backlog - Features
 - [ ] (lower priority) Technical indicators (MACD) - feature only enabled for 1h (5-second) window
 - [ ] Additional trading pairs (SOL, DOGE, etc.)
 - [ ] Export trade history (CSV, JSON)
 - [ ] Advanced portfolio analytics (P&L, Sharpe ratio)
+- [ ] WebSocket support for live updates
+- [ ] Live price streaming
