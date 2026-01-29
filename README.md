@@ -34,6 +34,8 @@ docker logs sim -f
 
 The mock trading platform simulates a real cryptocurrency exchange environment by polling live market data from Coinbase every 5 seconds and maintaining an in-memory sliding window of price history. Users can trade three asset pairs (BTC/USD, ETH/USD, BTC/ETH) with full support for cross-pair pricing calculations, manage their portfolios through deposits and withdrawals, and view comprehensive transaction history with lifetime statistics. The platform supports both authenticated users with persistent SQLite storage and guest users with session-only data, providing a multi-tab interface for dashboard overview, market exploration, and active trading.
 
+The trading interface includes both line and candlestick chart views with technical indicators (SMA, EMA, RSI) that can be toggled on demand. Indicators are calculated server-side and overlaid on price charts, with RSI displayed in a separate panel below the main chart. These same indicators are pre-calculated and provided to trading bots through the BotContext for strategy implementation.
+
 **Key Design Points:**
 
 - **Resilient Price Data Architecture**: Maintains a 24-hour sliding window of 5-second price data in memory, with historical backfill from Coinbase's 1-minute candles (linearly interpolated). Continues operation during temporary API failures, ensuring bots and charts always have access to price data.
@@ -55,7 +57,7 @@ Bots are trait-based modules that own their internal state and execute trading d
 
 **Decision Model - Quote Asset Terms**: All trading decisions are expressed in quote asset terms (e.g., USD for BTC/USD pairs). The user provides a stoploss amount in quote asset (e.g., $10,000), and bots dispatch decisions like "Buy $100 worth of BTC" or "Sell $100 worth of BTC". This creates an intuitive mental model where stoploss, step-size, and decisions all operate in the same currency unit. The framework converts quote amounts to base quantities during execution using current market price.
 
-**Data Access**: Bots receive raw, uninterpolated price data from the 5-second polling window (not the interpolated historical backfill). The BotContext includes the raw price_window Vec<PricePoint>, current balances, current market price, and trading pair metadata. Bots do NOT see global trade history - they only see their own trades, which they can track as part of their internal state if needed (as a standardized field in the bot struct template).
+**Data Access**: Bots receive raw, uninterpolated price data from the 5-second polling window (not the interpolated historical backfill). The BotContext includes the raw price_window Vec<PricePoint>, current balances, current market price, trading pair metadata, and pre-calculated technical indicators (SMA, EMA, RSI, MACD). These indicators are computed by the framework before each tick to avoid redundant calculation across bots. Bots do NOT see global trade history - they only see their own trades, which they can track as part of their internal state if needed.
 
 **Stoploss Enforcement**: The framework (not the bot) is responsible for stoploss checking. Stoploss is evaluated against total portfolio value (all assets converted to USD equivalent) since bots impose a full trading lock across all markets. The reference point is the portfolio value when the bot started. After each tick, before executing any trade decision, the framework calculates current portfolio value and terminates the bot if losses exceed the stoploss threshold.
 
@@ -135,6 +137,7 @@ The application uses a hybrid data model combining in-memory state for real-time
 - `base_asset: String` - Trading pair base (e.g., "BTC")
 - `quote_asset: String` - Trading pair quote (e.g., "USD")
 - `tick_count: u64` - Number of ticks since bot started (0-indexed)
+- `indicator_data: Option<IndicatorData>` - Pre-calculated technical indicators (SMA, EMA, RSI values) when available
 
 **BotDecision** (bot's output each tick)
 - `DoNothing` - Skip this cycle
